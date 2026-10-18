@@ -14,14 +14,16 @@ Based on upstream commit `a0c23fe` (0.1.7).
 
 You need a working CyberpunkVRPort **0.1.7** install (RED4ext, CET, ArchiveXL and the rest of its requirements) and SteamVR set as your OpenXR runtime.
 
-1. Close the game.
-2. From PowerShell, in the folder containing this update:
+1. Close the game. Extract the release zip to any folder.
+2. Double-click **`Install-Vive.cmd`**. Paste your Cyberpunk 2077 folder (the one that contains `bin` and `archive`), then type `Vive` or `VivePro`.
+
+   Or, from PowerShell in the extracted folder:
 
    ```powershell
-   & .\scripts\install_vive.ps1 -GameRoot 'C:\Path\To\Cyberpunk 2077' -Headset VivePro -DllPath .\CyberpunkVR_Stereo.dll
+   powershell -ExecutionPolicy Bypass -File .\scripts\install_vive.ps1 -GameRoot 'C:\Path\To\Cyberpunk 2077' -Headset VivePro -DllPath .\CyberpunkVR_Stereo.dll -BackupRoot .\backups
    ```
 
-   Use `-Headset Vive` for the original Vive. The installer:
+   The installer:
    - checks that your camera archive is the stock 0.1.7 one, and stops before changing anything if it isn't;
    - backs up every file it replaces and prints a restore manifest;
    - selects the headset, 1800×2000 per eye, SteamVR (OpenXR) and automatic FOV;
@@ -29,11 +31,9 @@ You need a working CyberpunkVRPort **0.1.7** install (RED4ext, CET, ArchiveXL an
    - turns frame generation off.
 3. Start SteamVR, then the game. The launcher should show your headset and **1800 x 2000**.
 
-To undo, with the game closed:
+To undo, close the game and double-click **`Restore-Before-Vive.cmd`**. It restores the most recent backup in `.\backups`. Alternatively, run `scripts\restore_vive.ps1 -ManifestPath '<the manifest path the installer printed>'`.
 
-```powershell
-& .\scripts\restore_vive.ps1 -ManifestPath '<the manifest path the installer printed>'
-```
+Optional: **`Run-Headset-Test.cmd`** shows a 60-second checkerboard through SteamVR without the game. If the squares are sharp, your headset, GPU and SteamVR are fine.
 
 ### Resolution choices
 
