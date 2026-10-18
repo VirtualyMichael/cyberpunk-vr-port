@@ -77,6 +77,7 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle, RED4ext::v1::
         if (g_started.exchange(true)) break;
         InitRuntimePaths();
         Log("=== CyberpunkVRPort red4ext plugin loaded (no dxgi proxy) ===\n");
+        Log("[VIVE-BUILD] 0.1.7-vive2; Vive presets ID=15 (OG) and 16 (Pro); SteamVR delivery check; centered projection; aspect-aware menus; eye capture available\n");
         // FIRST, and deliberately: registering the RTTI callbacks is cheap and has a window. The
         // graphics init below waits on the game's device and can take seconds; doing it first is
         // how the natives would come back nil in Lua.

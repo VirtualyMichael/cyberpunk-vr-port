@@ -19,6 +19,7 @@
 #include "Render/DepthResolve.hpp"
 #include "Render/SharpenPass.hpp"
 #include "Render/ColorBlit.hpp"
+#include "Render/EyeImageCapture.hpp"
 #include "Runtimes/HudQuad.hpp"
 #include "Runtimes/RoomscaleMovement.hpp"
 #include "Runtimes/TrackingReset.hpp"
@@ -1072,6 +1073,7 @@ private:
     std::vector<EyeSwapchain> m_eyeSwapchains;
     CapturedMonoFrame m_monoCapturedFrame;
     cvr::framegen::Presenter m_framegen;
+    cvr::diagnostic::EyeImageCapture m_eyeImageCapture;
     cvr::framegen::StatsOverlay m_framegenOverlay;
     // [DEPTH] Game scene-depth snapshot for the XR depth layer (parallel to color).
     ID3D12Resource* m_depthSnapshot = nullptr;

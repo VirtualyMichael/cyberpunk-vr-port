@@ -4,6 +4,14 @@
 
 #include <openxr/openxr.h>
 
+// The game draws a centered camera. Describe that camera using its actual
+// image aspect; lens asymmetry belongs to the runtime's final mapping.
+inline XrFovf MakeCenteredImageFov(float horizontalDeg, float aspect) {
+    const float halfH = horizontalDeg * (3.1415926535f / 360.0f);
+    const float halfV = std::atan(std::tan(halfH) / aspect);
+    return {-halfH, halfH, halfV, -halfV};
+}
+
 // Runtime frustum correction helpers for the game camera/projection path.
 // Some runtimes expose slightly asymmetric per-eye frusta; the game camera code
 // behaves better when those frusta are recentred while the visible runtime view

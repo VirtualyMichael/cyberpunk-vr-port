@@ -80,9 +80,15 @@ VOID CALLBACK Inspect(HWND,UINT,UINT_PTR,DWORD){
         if(mode==0) {
             Check(GetDlgItem(window,102) && GetDlgItem(window,104),"launcher controls missing");
             const auto headset=GetDlgItem(window,104);
-            Check(SendMessageW(headset,CB_GETCOUNT,0,0)==15,"headset count changed unexpectedly");
+            Check(SendMessageW(headset,CB_GETCOUNT,0,0)==17,"headset count changed unexpectedly");
             Check(ComboText(headset,3)==L"Pico4" && ComboText(headset,12)==L"Bigscreen Beyond 2/2e","existing headset IDs moved");
             Check(ComboText(headset,13)==L"Steam Frame" && ComboText(headset,14)==L"HP Reverb G2","new headset entries missing");
+            Check(ComboText(headset,15)==L"HTC Vive (Original)","Original Vive entry missing");
+            const auto vive=Resolutions(window,15);
+            Check(vive.size()==4 && vive.front()==L"1800 x 2000 (Quality baseline)" && vive.back()==L"1080 x 1200 (Low-cost diagnostic)","Vive resolution ladder incorrect");
+            Check(ComboText(headset,16)==L"HTC Vive Pro","Vive Pro entry missing");
+            const auto vivePro=Resolutions(window,16);
+            Check(vivePro.size()==4 && vivePro.front()==L"1800 x 2000 (Quality, tested)" && vivePro[1]==L"2296 x 2552 (High, above SteamVR 100%)","Vive Pro resolution ladder incorrect");
             const auto pico=Resolutions(window,3),reverb=Resolutions(window,14),frame=Resolutions(window,13);
             Check(pico==reverb && pico.size()==8,"Reverb G2 differs from Pico 4 resolutions");
             Check(frame.size()==8 && frame.front()==L"2160 x 2160 (Native panel)" && frame.back()==L"6000 x 6000","Steam Frame resolution ladder incorrect");
@@ -102,8 +108,19 @@ VOID CALLBACK Inspect(HWND,UINT,UINT_PTR,DWORD){
             SendMessageW(GetDlgItem(window,101),CB_SETCURSEL,7,0);
             SendMessageW(GetDlgItem(window,102),BM_CLICK,0,0);
             Check(savedHmd==14 && savedWidth==6000 && savedHeight==6000,"Reverb G2 selection was not saved");
-        } else {
+        } else if(mode==5) {
             Check(SendMessageW(GetDlgItem(window,104),CB_GETCURSEL,0,0)==14 && SendMessageW(GetDlgItem(window,101),CB_GETCURSEL,0,0)==7,"Reverb G2 selection did not reload");
+            SelectHmd(window,15);
+            SendMessageW(GetDlgItem(window,102),BM_CLICK,0,0);
+            Check(savedHmd==15 && savedWidth==1800 && savedHeight==2000,"Vive selection was not saved");
+        } else if(mode==6) {
+            Check(SendMessageW(GetDlgItem(window,104),CB_GETCURSEL,0,0)==15 && savedWidth==1800 && savedHeight==2000,"Vive selection did not reload");
+            SelectHmd(window,16);
+            SendMessageW(GetDlgItem(window,101),CB_SETCURSEL,1,0);
+            SendMessageW(GetDlgItem(window,102),BM_CLICK,0,0);
+            Check(savedHmd==16 && savedWidth==2296 && savedHeight==2552,"Vive Pro selection was not saved");
+        } else {
+            Check(SendMessageW(GetDlgItem(window,104),CB_GETCURSEL,0,0)==16 && SendMessageW(GetDlgItem(window,101),CB_GETCURSEL,0,0)==1,"Vive Pro selection did not reload");
             PostMessageW(window,WM_CLOSE,0,0);
         }
     }catch(const std::exception& e){failure=e.what();if(window)PostMessageW(window,WM_CLOSE,0,0);else PostQuitMessage(20);}
@@ -122,7 +139,7 @@ int main()try {
     InstallOSHooks();
     g_origClipCursor=FakeClip;g_origSetCursorPos=FakeWarp;g_origGetCursorPos=FakePos;
     g_origGetCursorInfo=FakeInfo;g_origGetMessagePos=FakeMessagePos;
-    for(mode=0;mode<6;++mode){
+    for(mode=0;mode<8;++mode){
         deadline=GetTickCount64()+3000;timer=SetTimer(nullptr,0,20,Inspect);Check(timer!=0,"timer unavailable");
         ShowLauncherDialog();KillTimer(nullptr,timer);
         Check(failure.empty(),failure.c_str());
@@ -133,13 +150,13 @@ int main()try {
         else Check(!PeekMessageW(&message,nullptr,WM_QUIT,WM_QUIT,PM_REMOVE),"closing launcher posted application WM_QUIT");
         RECT client{};HookedGetClientRect(g_gameHwnd,&client);Check(client.right==7654 && client.bottom==4321,"game virtual input did not resume");
     }
-    Check(saves==3 && savedDebug==1,"Start did not save once per selection");
+    Check(saves==5 && savedDebug==1,"Start did not save once per selection");
     WNDCLASSW failed{};failed.lpfnWndProc=RejectWindow;failed.hInstance=gameClass.hInstance;failed.lpszClassName=L"CyberpunkVRPortLauncherClass";
     Check(RegisterClassW(&failed)!=0,"failure class unavailable");ShowLauncherDialog();
     Check(!IsLauncherOpen() && IsWindowVisible(g_gameHwnd),"creation failure stranded game/input");
     UnregisterClassW(failed.lpszClassName,failed.hInstance);
     DestroyWindow(g_gameHwnd);g_gameHwnd=nullptr;UnregisterClassW(gameClass.lpszClassName,gameClass.hInstance);
     Check(SetThreadDesktop(originalDesktop),"cannot restore test thread desktop");CloseDesktop(desktop);
-    std::cout<<"PASS Steam Frame/Reverb G2 presets and saved IDs, Unicode title, topmost, hidden fullscreen owner, input passthrough, start/close/quit, reentry and creation failure\n";
+    std::cout<<"PASS Vive/Vive Pro/Steam Frame/Reverb G2 presets and saved IDs, Unicode title, topmost, hidden fullscreen owner, input passthrough, start/close/quit, reentry and creation failure\n";
     return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

@@ -33,6 +33,9 @@ tools/*
 !tools/render_parity_tests/
 !tools/game_settings_tests/
 !tools/launcher_tests/
+!tools/vive_tests/
+/build-vive-tests/
+/build-launcher-tests/
 !tools/steam_frame_tests/
 !tools/autograss_tests/
 releases/
@@ -67,6 +70,9 @@ package.json
 !scripts/build_dist.ps1
 !scripts/deploy_full.ps1
 !scripts/deploy_plugin.ps1
+!scripts/install_vive.ps1
+!scripts/restore_vive.ps1
+!scripts/capture_vive.ps1
 # and the asset generator, which authors the VRCAM components the launcher offers.
 !tools/gen_vrcam_assets.py
 # and the crash-dump reader, which is how a tester's .dmp gets turned into a stack.

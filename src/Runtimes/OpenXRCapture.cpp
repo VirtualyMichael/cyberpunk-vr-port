@@ -7,6 +7,7 @@
 #include <atomic>
 extern "C" int CyberpunkVR_BindPoseToImage;
 #include "Runtimes/OpenXRManager.hpp"
+#include "Runtimes/SteamVrSyncProbe.hpp"
 #include "Camera/ImagePoseIdentity.hpp"
 #include "Camera/ImagePoseMath.hpp"
 #include "Camera/CameraState.hpp"
@@ -1489,6 +1490,7 @@ bool OpenXRManager::EnsureMonoSubmitResources() {
         }
     }
 
+    cvr::RunSteamVrSyncProbe("before-eye-swapchains", m_d3dDevice, m_d3dQueue);
     m_eyeSwapchains.resize(viewCount);
 
     for (uint32_t eye = 0; eye < viewCount; ++eye) {

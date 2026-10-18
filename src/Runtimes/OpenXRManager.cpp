@@ -3,6 +3,7 @@
 #include "Runtimes/HybridBodyYaw.hpp"
 #include "Anim/WheelGrab.hpp"   // the wheel-grab blends, for the hand smoothing below
 #include "Runtimes/OpenXRManager.hpp"
+#include "Runtimes/SteamVrSyncProbe.hpp"
 #include "Hooks/RoomscaleMove.hpp"
 #include "Camera/CameraLink.hpp"
 #include "Runtimes/SimulatorRecenter.hpp"
@@ -945,6 +946,7 @@ bool OpenXRManager::InitGraphics(ID3D12Device* device, ID3D12CommandQueue* queue
     m_graphicsBinding.queue = queue;
 
     LogDxgiAdapterForDevice(device);
+    cvr::RunSteamVrSyncProbe("init-graphics", device, queue);
 
     XrSessionCreateInfo sessionInfo{XR_TYPE_SESSION_CREATE_INFO};
     sessionInfo.next = &m_graphicsBinding;
@@ -1051,6 +1053,7 @@ bool OpenXRManager::BeginSession() {
     m_sessionRunning.store(true, std::memory_order_relaxed);
     NotifySubmitThread();   // in case threaded submit was wanted before the session started
     Log("OpenXRManager: Session begun.\n");
+    cvr::ScheduleSteamVrDeliveryCheck();
     return true;
 }
 
@@ -2170,6 +2173,7 @@ void OpenXRManager::Shutdown() {
     // the swapchains afterwards -- i.e. it handed the runtime handles whose parent was already gone.
     // (dabinn, TofuExpress fbe336fa)
     m_framegen.Reset();
+    m_eyeImageCapture.Reset();
     m_framegenOverlay.Shutdown(true);
     m_settingsPanel.Shutdown();
     cvr::framegen::StopHardwareTelemetry();

@@ -185,6 +185,15 @@ const XrCompositionLayerBaseHeader* Quad::Prepare(XrSession session, XrSpace spa
     layer.space=space; layer.eyeVisibility=XR_EYE_VISIBILITY_BOTH;
     layer.subImage={swapchain,{{0,0},{static_cast<int32_t>(width),static_cast<int32_t>(height)}},0};
     if(eyeOffsets && tracked) {lastEyeOffsets[0]=eyeOffsets[0];lastEyeOffsets[1]=eyeOffsets[1];eyeOffsetsValid=true;}
+    // TWO WAYS TO PLACE A HUD PANEL -- xr_hud_stereo_depth in vrport.ini, "Stereo depth" in F10 > HUD.
+    //
+    //   1 = ONE quad in the world, seen by both eyes. Real parallax, so it reads as a flat panel
+    //       hanging xr_hud_distance metres in front of you. Recommended for HTC Vive / Vive Pro (and
+    //       any parallel-panel headset); the Vive installer writes 1.
+    //   0 = (upstream default) one quad PER EYE, each slid by that eye's offset so both eyes see it
+    //       at the same angle. Zero parallax places the panel at optical infinity -- behind the world
+    //       it is drawn over. On a Vive that conflict reads as a doubled, cross-eyed HUD as soon as
+    //       you look at anything nearby. Kept because it was chosen for canted-display headsets.
     if(!g_liveControls.xrHudStereoDepth && eyeOffsetsValid) {
         // Each eye sees the same angular direction, including canted/asymmetric
         // views. Cancel only eye translation; the common orientation is retained.

@@ -269,6 +269,59 @@ static const ResolutionPreset kBigscreenBeyond2Resolutions[] = {
     {6000, 4840, L"6000 x 4840"},
 };
 
+// ---- HOW TO ADD A HEADSET ----------------------------------------------------------------------
+//
+// A headset entry only chooses the per-eye RENDER SIZE. Field of view, IPD, eye poses and controller
+// bindings all come from the OpenXR runtime at run time, so nothing else in the port needs to know
+// which headset this is. Steps:
+//
+//   1. Start the game once with ANY preset and open bin\x64\cyberpunkvrport.log. Find the line
+//          OpenXRManager[FOV]: raw left=(L=.. R=.. U=.. D=..) right=(...)
+//      The half-angles there are what your lenses really cover.
+//   2. Work out the image aspect the port needs (width / height):
+//          horizontal half = (|L| + R) / 2              (the port re-centres the frustum)
+//          vertical half   = max(U, |D|)
+//          aspect          = tan(horizontal half) / tan(vertical half)
+//      The render target must have this shape. A wrong shape stretches the world (see the long
+//      Quest 3 note above), and no FOV setting can undo that.
+//   3. Pick sizes with that aspect that ALREADY EXIST in the shipped camera archive -- each size needs
+//      a vrcam_<W>x<H> component and a vrcam_feed_<W>x<H> camera. The installed list is the
+//      "components" array in bin\x64\plugins\cyber_engine_tweaks\mods\CyberpunkVRPort_Stereo\vrcam.json.
+//      A size that is not in that list cannot be selected, however reasonable it looks.
+//   4. Add a ResolutionPreset array below. The FIRST entry is the default the launcher offers.
+//   5. Append ONE row to kHmdPresets with the next unused ID. Never renumber or reuse an ID: it is
+//      saved as hmd_type in vrport-launcher.ini, so moving one silently switches people's headsets.
+//   6. Extend tools/launcher_tests/main.cpp (headset count, name, ladder) and run it.
+//
+// HTC VIVE FAMILY (OG Vive ID 15, Vive Pro ID 16). Both are lighthouse headsets on SteamVR
+// with parallel panels and an image aspect of about 0.89-0.90, measured from the runtime:
+//
+//   OG Vive   L -54.5 R 51.3 U 55.7 D -55.8   -> tan(52.9)/tan(55.8) = 0.90
+//   Vive Pro  L -53.4 R 50.3 U 54.9 D -54.8   -> tan(51.9)/tan(54.9) = 0.89
+//
+// So both use 0.9-shaped targets, the same shape as the Valve Index ladder. SteamVR's 100% render
+// size is 1852x2056 (OG) and 2016x2240 (Pro); neither exists in the archive, so the ladders offer the
+// nearest authored sizes around them. 1800x2000 is the default because it is the size both headsets
+// were tested at.
+
+// OG Vive: panel 1080x1200 per eye; SteamVR 100% = 1852x2056.
+static const ResolutionPreset kViveResolutions[] = {
+    {1800, 2000, L"1800 x 2000 (Quality baseline)"},
+    {1440, 1600, L"1440 x 1600 (Balanced)"},
+    {1260, 1400, L"1260 x 1400 (Performance)"},
+    {1080, 1200, L"1080 x 1200 (Low-cost diagnostic)"},
+};
+
+// Vive Pro: panel 1440x1600 per eye; SteamVR 100% = 2016x2240. NOT the Vive Pro 2, whose panels
+// and wider FOV are unmeasured here -- it needs its own entry built from its own log line.
+// 2296x2552 is the smallest authored 0.9 size above SteamVR's own 100%, for GPUs with headroom.
+static const ResolutionPreset kViveProResolutions[] = {
+    {1800, 2000, L"1800 x 2000 (Quality, tested)"},
+    {2296, 2552, L"2296 x 2552 (High, above SteamVR 100%)"},
+    {1440, 1600, L"1440 x 1600 (Native panel)"},
+    {1260, 1400, L"1260 x 1400 (Performance)"},
+};
+
 static const HmdPreset kHmdPresets[] = {
     {0, L"Q2",    L"Meta Quest2",     kQuest2Resolutions,       _countof(kQuest2Resolutions)},
     {1, L"Q3S",   L"Meta Quest3s",    kQuest3SResolutions,      _countof(kQuest3SResolutions)},
@@ -285,6 +338,9 @@ static const HmdPreset kHmdPresets[] = {
     {12,L"BSB2",  L"Bigscreen Beyond 2/2e", kBigscreenBeyond2Resolutions, _countof(kBigscreenBeyond2Resolutions)},
     {13,L"SFRAME",L"Steam Frame", kSteamFrameResolutions, _countof(kSteamFrameResolutions)},
     {14,L"RG2",   L"HP Reverb G2", kPico4Resolutions, _countof(kPico4Resolutions)},
+    {15,L"VIVE",  L"HTC Vive (Original)", kViveResolutions, _countof(kViveResolutions)},
+    {16,L"VIVEPRO",L"HTC Vive Pro", kViveProResolutions, _countof(kViveProResolutions)},
+    // New headsets go HERE, with the next ID (17, 18, ...). See "HOW TO ADD A HEADSET" above.
 };
 
 struct RuntimeOption {
@@ -293,8 +349,8 @@ struct RuntimeOption {
 };
 
 static const RuntimeOption kRuntimeOptions[] = {
-    {1, L"OpenVR  (SteamVR)"},
-    {0, L"OpenXR  (VDXR, PimaxOpenXR)"},
+    {1, L"SteamVR (OpenXR)"},
+    {0, L"OpenXR (system default)"},
 };
 
 static HFONT g_fontHeader = nullptr;

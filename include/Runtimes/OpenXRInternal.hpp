@@ -98,7 +98,6 @@ inline XrFovf ApplyForcedProjectionFov(const XrFovf& sourceFov, const XrFovf* pa
             const float gameFovDeg = GetGameRenderFovDeg();
             if (gameFovDeg > 1.0f) {
                 const float wantHalfH = (gameFovDeg * 3.1415926535f / 180.0f) * 0.5f;
-                const float hCenter = (fov.angleRight + fov.angleLeft) * 0.5f;
 
                 // DESCRIBE WHAT WAS RENDERED, NOT WHAT THE PANEL IS.
                 //
@@ -121,8 +120,11 @@ inline XrFovf ApplyForcedProjectionFov(const XrFovf& sourceFov, const XrFovf* pa
                     ? (gameVFovDeg * 3.1415926535f / 180.0f) * 0.5f
                     : realHalfV;
 
-                fov.angleLeft  = hCenter - wantHalfH;
-                fov.angleRight = hCenter + wantHalfH;
+                // No horizontal lens offset was applied to the render camera.
+                // Carrying a residual runtime center into this metadata shifts
+                // the pixels without shifting the camera that produced them.
+                fov.angleLeft  = -wantHalfH;
+                fov.angleRight = wantHalfH;
                 // Symmetric about the camera axis when the rendered vertical is known; the runtime's
                 // own centre only as a fallback before the FOV hook has fired.
                 fov.angleUp    = (haveRenderedV ? 0.0f : vCenter) + wantHalfV;
@@ -150,8 +152,7 @@ inline XrFovf ApplyForcedProjectionFov(const XrFovf& sourceFov, const XrFovf* pa
 
     // Custom user override (xr_force_fov): keep the historical "forced symmetric
     // projection" behavior, but derive vertical FOV from the ACTUAL render aspect,
-    // not a broken hardcoded 1.0. This matches the UI text: it changes only the
-    // OpenXR projection layer FOV, not the CP2077 camera FOV.
+    // not a hardcoded 1.0. CameraFov also consumes this same horizontal override.
     float aspect = (height > 1.0f) ? (width / height) : 0.0f;
     if (!(aspect > 0.01f && aspect < 10.0f)) {
         const float tanLeft = std::tanf(-sourceFov.angleLeft);
@@ -162,14 +163,7 @@ inline XrFovf ApplyForcedProjectionFov(const XrFovf& sourceFov, const XrFovf* pa
         aspect = (v > 1.0e-5f) ? ((tanLeft + tanRight) / v) : 1.0f;
     }
 
-    const float halfFovH = (forceFov * 3.1415926535f / 180.0f) * 0.5f;
-    const float halfFovV = atanf(tanf(halfFovH) / aspect);
-    XrFovf fov{};
-    fov.angleLeft = -halfFovH;
-    fov.angleRight = halfFovH;
-    fov.angleDown = -halfFovV;
-    fov.angleUp = halfFovV;
-    return fov;
+    return MakeCenteredImageFov(forceFov, aspect);
 }
 
 // ---- mono swapchain format pick (were file-scope static in openxr_manager.cpp) ----

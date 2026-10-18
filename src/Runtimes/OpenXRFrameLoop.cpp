@@ -32,6 +32,8 @@
 
 // Shared physical-body heading in tracking space; the getter refreshes suspension state.
 extern float BodyYawFollowOffset();
+extern "C" int GetCurrentHmdType();
+extern "C" float CyberpunkVR_DebugMainProjYY;
 
 // Run the XR cycle on every display frame and let xrWaitFrame pace it, re-submitting the
 // last snapshot with ITS OWN pose when the game has not produced a new one. 0 restores the
@@ -950,6 +952,7 @@ DWORD OpenXRManager::FrameThreadMain() {
 
     if (m_stopFrameThread.load(std::memory_order_relaxed)) return 0;
     do {
+        m_eyeImageCapture.Poll();
         PollEvents();
         TickAutoCalibration();
 
@@ -1979,6 +1982,7 @@ DWORD OpenXRManager::FrameThreadMain() {
                     SUCCEEDED(currentAllocator->Reset()) && SUCCEEDED(m_cmdList->Reset(currentAllocator, nullptr))) {
                     auto gpuProfile = cvr::gpu::profile::Begin(m_cmdList);
                     bool copyReady = true;
+                    ID3D12Resource* diagnosticEyes[2]{};
                     bool useDepthLayer = monoHasDepth && m_depthLayerSupported;
                     std::vector<bool> acquiredEyes(viewCountOutput, false);
                     std::vector<bool> acquiredDepthEyes(viewCountOutput, false);
@@ -2015,6 +2019,7 @@ DWORD OpenXRManager::FrameThreadMain() {
                         }
 
                         ID3D12Resource* texture = m_eyeSwapchains[eye].images[imageIndex].texture;
+                        if (eye < 2) diagnosticEyes[eye] = texture;
                         if (!texture) {
                             Log("OpenXRManager: XR swapchain texture missing for eye %u image %u\n", eye, imageIndex);
                             copyReady = false;
@@ -2232,11 +2237,9 @@ DWORD OpenXRManager::FrameThreadMain() {
                             }
                             const float menuFovDeg = GetMenuFov();
                             if (menuFovDeg > 1.0f && menuFovDeg < 170.0f) {
-                                const float halfFov = (menuFovDeg * 3.1415926535f / 180.0f) * 0.5f;
-                                projectionViews[eye].fov.angleLeft = -halfFov;
-                                projectionViews[eye].fov.angleRight = halfFov;
-                                projectionViews[eye].fov.angleDown = -halfFov;
-                                projectionViews[eye].fov.angleUp = halfFov;
+                                const auto image = monoSource->GetDesc();
+                                projectionViews[eye].fov = MakeCenteredImageFov(
+                                    menuFovDeg, static_cast<float>(image.Width) / image.Height);
                             }
                         }
                         projectionViews[eye].subImage.swapchain = m_eyeSwapchains[eye].handle;
@@ -2407,6 +2410,20 @@ DWORD OpenXRManager::FrameThreadMain() {
                         }
                     }
 
+                    if (copyReady && viewCountOutput == 2 && vrcamEye && !menuRectActive &&
+                        !cvr::framegen::Enabled() && (GetCurrentHmdType() == 15 || GetCurrentHmdType() == 16) &&
+                        m_eyeImageCapture.TakeRequest()) {
+                        // One-shot eye-image capture (vive-capture.request) for the Vive family presets.
+                        ID3D12Resource* sources[2]{};
+                        const unsigned mainEye = CyberpunkVR_MainIsRightEye ? 1u : 0u;
+                        sources[mainEye] = monoSource;
+                        sources[mainEye ^ 1] = vrcamEye;
+                        if (fgSelected) for (unsigned eye = 0; eye < 2; ++eye) sources[eye] = fgSelection.frame.color[eye];
+                        m_eyeImageCapture.Record(m_d3dDevice, m_cmdList, sources, diagnosticEyes,
+                            projectionViews.data(), presentSerial, GetGameRenderFovDeg(),
+                            GetGameRenderVerticalFovDeg(), CyberpunkVR_DebugMainProjYY);
+                    }
+
                     if (!copyReady) {
                         for (uint32_t eye = 0; eye < viewCountOutput; ++eye) {
                             if (!acquiredEyes[eye]) {
@@ -2452,8 +2469,10 @@ DWORD OpenXRManager::FrameThreadMain() {
                         m_d3dQueue->ExecuteCommandLists(1, cmdLists);
                         
                         ++m_fenceValue;
-                        if (SUCCEEDED(m_d3dQueue->Signal(m_fence, m_fenceValue)))
+                        if (SUCCEEDED(m_d3dQueue->Signal(m_fence, m_fenceValue))) {
                             cvr::gpu::profile::Submitted(gpuProfile, m_d3dQueue, m_fence, m_fenceValue);
+                            m_eyeImageCapture.Submitted(m_fence, m_fenceValue);
+                        } else m_eyeImageCapture.Reset();
                         capturedReadFence=m_fenceValue;
 
                         bool releaseOk = true;
@@ -2501,7 +2520,8 @@ DWORD OpenXRManager::FrameThreadMain() {
                             layerQuad.pose = ComputeMenuQuadPose(headPoseLocated, location.pose, frameState.predictedDisplayTime);
 
                                 float quadWidth = 2.0f * 1.5f * tanf(GetMenuFov() * 3.14159f / 180.0f * 0.5f);
-                                layerQuad.size = {quadWidth, quadWidth};
+                                const auto image = monoSource->GetDesc();
+                                layerQuad.size = {quadWidth, quadWidth * image.Height / static_cast<float>(image.Width)};
                                 layers[0] = reinterpret_cast<const XrCompositionLayerBaseHeader*>(&layerQuad);
                             } else {
                                 layerProj.space = m_localSpace;

@@ -63,3 +63,9 @@ set_target_properties(xr_probe_cli PROPERTIES
     OUTPUT_NAME "xrprobe"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/xr_probe"
 )
+
+add_executable(vive_pattern vive_pattern.cpp)
+target_compile_features(vive_pattern PRIVATE cxx_std_20)
+target_compile_definitions(vive_pattern PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX XR_USE_PLATFORM_WIN32)
+target_link_libraries(vive_pattern PRIVATE openxr_loader d3d12 dxgi)
+set_target_properties(vive_pattern PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/xr_probe")
