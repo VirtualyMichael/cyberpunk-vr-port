@@ -51,6 +51,7 @@ extern DWORD WINAPI WorkerThread(LPVOID);
 extern "C" __declspec(dllexport) void CyberpunkVRPort_PluginBootstrap();
 // Boots sync_stereo (which installs the D3D12CreateDevice hook that captures device+queue).
 extern "C" void CyberpunkVRPort_InitStereo();
+extern "C" void CyberpunkVR_CloseOwnedExecution();
 extern "C" ID3D12Device*       CyberpunkVR_GetGameDevice();
 extern "C" ID3D12CommandQueue* CyberpunkVR_GetGameQueue();
 // The script-callable natives (VRBodyBonePos, VRPalmModelPos, the lot). They used to be a SECOND
@@ -77,7 +78,7 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle, RED4ext::v1::
         if (g_started.exchange(true)) break;
         InitRuntimePaths();
         Log("=== CyberpunkVRPort red4ext plugin loaded (no dxgi proxy) ===\n");
-        Log("[VIVE-BUILD] 0.1.7-vive2; Vive presets ID=15 (OG) and 16 (Pro); SteamVR delivery check; centered projection; aspect-aware menus; eye capture available\n");
+        Log("[VIVE-BUILD] 0.1.8-vive1; Vive presets ID=16 (OG) and 17 (Pro); Index grip + trackpad menu; SteamVR delivery check; centered projection; aspect-aware menus; eye capture available\n");
         // FIRST, and deliberately: registering the RTTI callbacks is cheap and has a window. The
         // graphics init below waits on the game's device and can take seconds; doing it first is
         // how the natives would come back nil in Lua.
@@ -97,6 +98,7 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle, RED4ext::v1::
         break;
     }
     case RED4ext::v1::EMainReason::Unload:
+        CyberpunkVR_CloseOwnedExecution();
         // RED4ext unloads the plugin BEFORE the process finishes tearing down the graphics runtime,
         // and nothing here used to take that window (dabinn, TofuExpress fbe336fa). Stopping OpenXR
         // and dropping our overlay's device references while D3D is still alive is the difference

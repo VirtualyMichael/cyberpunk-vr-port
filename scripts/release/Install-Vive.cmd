@@ -6,7 +6,7 @@ setlocal
 rem A PowerShell 7 parent leaves its module path behind, and Windows PowerShell then cannot
 rem find built-ins such as Get-FileHash. Cleared, Windows PowerShell rebuilds its own.
 set "PSModulePath="
-echo CyberpunkVRPort 0.1.7-vive2 installer (HTC Vive / Vive Pro)
+echo CyberpunkVRPort 0.1.8-vive1 installer (HTC Vive / Vive Pro)
 echo Close Cyberpunk 2077 before continuing.
 echo.
 set "GAME=%~1"

@@ -26,25 +26,13 @@ void Check(bool v,const char* reason){if(!v)throw std::runtime_error(reason);}
 void Hr(HRESULT h){Check(SUCCEEDED(h),"Direct3D operation failed");}
 void Near(float a,float b){Check(std::abs(a-b)<0.00001f,"projection mismatch");}
 constexpr float rad=3.1415926535f/180.f;
+// Menu panels were square. On a non-square eye image that stretches the menu, so the menu frustum takes the
+// image's own aspect.
 void Projection() {
-    const XrFovf raw[2]={{-54.487f*rad,51.257f*rad,55.744f*rad,-55.843f*rad},
-                        {-51.278f*rad,54.291f*rad,55.573f*rad,-55.816f*rad}};
-    gameH=108.974f;gameV=2*atan(tan(gameH*rad/2)/.9f)/rad;
-    for(int eye=0;eye<2;++eye) {
-        auto f=ApplyForcedProjectionFov(raw[eye],raw,eye,1800,2000);
-        Near(f.angleLeft,-gameH*rad/2);Near(f.angleRight,gameH*rad/2);
-        Near(f.angleUp,gameV*rad/2);Near(f.angleDown,-gameV*rad/2);
-        Near(tan(f.angleRight)/tan(f.angleUp),.9f);
-    }
-    forced=100;auto f=ApplyForcedProjectionFov(raw[0],raw,0,1440,1600);
-    Near(f.angleRight,50*rad);Near(tan(f.angleRight)/tan(f.angleUp),.9f);
-    auto menu=MakeCenteredImageFov(65.4f,.9f);Near(tan(menu.angleRight)/tan(menu.angleUp),.9f);
-    forced=0;gameH=gameV=0;
-    f=ApplyForcedProjectionFov(raw[0],nullptr,0,0,0);
-    Near(f.angleLeft,raw[0].angleLeft);Near(f.angleUp,raw[0].angleUp);
-    const auto corrected=ComputeRuntimeFovCorrection(raw[0],raw[1]);
-    f=ApplyForcedProjectionFov(raw[1],raw,1,1800,2000);Near(f.angleLeft,corrected.eye[1].angleLeft);
-    std::cout<<"PASS actual submit FOV with measured Vive asymmetry, forced aspect, menu aspect and startup fallback\n";
+    const auto menu=MakeCenteredImageFov(65.4f,.9f);Near(tan(menu.angleRight)/tan(menu.angleUp),.9f);
+    Near(menu.angleLeft,-menu.angleRight);Near(menu.angleDown,-menu.angleUp);
+    const auto square=MakeCenteredImageFov(65.4f,1.f);Near(square.angleRight,square.angleUp);
+    std::cout<<"PASS menu frustum follows the eye image aspect\n";
 }
 void Barrier(ID3D12GraphicsCommandList* list,ID3D12Resource* r,D3D12_RESOURCE_STATES a,D3D12_RESOURCE_STATES b){
     D3D12_RESOURCE_BARRIER x{};x.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;

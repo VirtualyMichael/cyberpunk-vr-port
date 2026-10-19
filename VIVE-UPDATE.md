@@ -1,21 +1,20 @@
-# HTC Vive and Vive Pro support (0.1.7-vive2)
+# HTC Vive and Vive Pro support (0.1.8-vive1)
 
-This update adds launcher presets for the **HTC Vive (Original)** and the **HTC Vive Pro**. It changes the HUD default for these headsets. It also adds a check that names the cause of the "blurry, zoomed-in image that only moves with your head" problem.
+This adds launcher presets for the **HTC Vive (Original)** and the **HTC Vive Pro**, usable Valve Index (Knuckles) controllers on those headsets, and a check that names the cause of the "blurry, zoomed-in image that only moves with your head" problem.
 
-Based on upstream commit `a0c23fe` (0.1.7).
+Based on upstream **0.1.8** (commit `9aa2601`). It is a small layer on top of that release: one replacement `CyberpunkVR_Stereo.dll`, a few settings, and scripts.
 
 | | |
 |---|---|
-| Tested in the headset | **HTC Vive Pro**, SteamVR 2.17.10 (OpenXR), AMD RX 7900 XTX, driver 31.0.24002.92, 1800×2000 per eye |
-| Built from the same measurements, not retested since the fix | HTC Vive (Original) |
+| Tested in the headset on 0.1.7 | **HTC Vive Pro**, SteamVR 2.17.10 (OpenXR), AMD RX 7900 XTX, driver 31.0.24002.92 |
+| Needs a test on 0.1.8 | everything below. 0.1.8 changes the renderer (asymmetric projection), so earlier results do not carry over. |
 | Not covered | HTC Vive Pro 2, Vive Cosmos, Vive Focus. They have different panels and FOV. See [Adding another headset](#adding-another-headset). |
 
 ## Installing
 
-You need a working CyberpunkVRPort **0.1.7** install (RED4ext, CET, ArchiveXL and the rest of its requirements) and SteamVR set as your OpenXR runtime.
-
-1. Close the game. Extract the release zip to any folder.
-2. Double-click **`Install-Vive.cmd`**. Paste your Cyberpunk 2077 folder (the one that contains `bin` and `archive`), then type `Vive` or `VivePro`.
+1. Install **upstream CyberpunkVRPort 0.1.8** first, exactly as its own `INSTALL.txt` says (extract it into the game folder, and delete the three old 0.1.7 archives it lists). You need its prerequisites: RED4ext, CET, redscript, TweakXL, ArchiveXL and Codeware. Start SteamVR before the game.
+2. Close the game. Extract this release's zip to any folder.
+3. Double-click **`Install-Vive.cmd`**. Paste your Cyberpunk 2077 folder (the one that contains `bin` and `archive`), then type `Vive` or `VivePro`.
 
    Or, from PowerShell in the extracted folder:
 
@@ -24,25 +23,28 @@ You need a working CyberpunkVRPort **0.1.7** install (RED4ext, CET, ArchiveXL an
    ```
 
    The installer:
-   - checks that your camera archive is the stock 0.1.7 one, and stops before changing anything if it isn't;
+   - checks that your camera archive is the stock 0.1.8 one, and stops before changing anything if it isn't;
    - backs up every file it replaces and prints a restore manifest;
-   - selects the headset, 1800×2000 per eye, SteamVR (OpenXR) and automatic FOV;
-   - sets `xr_hud_stereo_depth=1` (see [HUD](#hud-looks-doubled-or-cross-eyed));
-   - turns frame generation off.
-3. Start SteamVR, then the game. The launcher should show your headset and **1800 x 2000**.
+   - selects the headset, 1816×1976 per eye, SteamVR (OpenXR) and automatic FOV;
+   - sets `xr_hud_stereo_depth=1`, turns frame generation off, and leaves your other settings alone.
+4. Start SteamVR, then the game. The launcher should show your headset and **1816 x 1976**.
 
 To undo, close the game and double-click **`Restore-Before-Vive.cmd`**. It restores the most recent backup in `.\backups`. Alternatively, run `scripts\restore_vive.ps1 -ManifestPath '<the manifest path the installer printed>'`.
 
-Optional: **`Run-Headset-Test.cmd`** shows a 60-second checkerboard through SteamVR without the game. If the squares are sharp, your headset, GPU and SteamVR are fine.
+Optional: **`Run-Headset-Test.cmd`** shows a 60-second checkerboard through SteamVR without the game. If the squares are sharp, your headset, GPU and SteamVR are fine. **`Capture-Eye-Images.cmd`** saves both eye images for a bug report.
 
-### Resolution choices
+### Headset IDs and resolution choices
 
-| Headset | Launcher entry | Sizes offered (first = default) |
+Upstream 0.1.8 took ID 15 for the MeganeX superlight 8K, so the Vive presets use **16 and 17**. IDs are saved in `vrport-launcher.ini`; a save from the earlier 0.1.7 Vive build (15 and 16) is not carried over, so run the installer again or pick your headset in the launcher.
+
+| Headset | ID | Sizes offered (first = default) |
 |---|---|---|
-| Vive (Original), ID 15 | HTC Vive (Original) | 1800×2000, 1440×1600, 1260×1400, 1080×1200 |
-| Vive Pro, ID 16 | HTC Vive Pro | 1800×2000, 2296×2552, 1440×1600, 1260×1400 |
+| HTC Vive (Original) | 16 | 1816×1976, 1456×1584, 1272×1384, 1088×1184 |
+| HTC Vive Pro | 17 | 1816×1976, 2064×2232, 1456×1584, 1272×1384 |
 
-All sizes have the 0.9 width:height shape that these lenses need. The launcher can only offer sizes that already exist in the mod's camera archive. That's why SteamVR's own 100% sizes (1852×2056 and 2016×2240) are not listed; the nearest authored sizes around them are.
+The 0.1.8 launcher can only offer sizes that exist in its camera archive, and each Vive size here costs the same number of pixels as the native Vive size it replaces: 1816×1976 ≈ 1800×2000 (the size both headsets were tested at), 1456×1584 ≈ 1440×1600 (the Vive Pro panel), 1088×1184 ≈ 1080×1200 (the OG panel) and 2064×2232 ≈ 2016×2240 (SteamVR's own 100% on a Vive Pro).
+
+They are the Valve Index sizes. A Vive Pro's measured lens window has a width/height of about **0.897**, the Index's is **0.920**, and no 0.897-shaped size exists in the archive yet, so the pixels come out about 2.5% wider than square. If Vive-shaped sizes are added with `tools/gen_vrcam_assets.py`, switch the ladders to them.
 
 ## Troubleshooting
 
@@ -65,16 +67,13 @@ This build checks for the problem automatically. About 20 seconds into a VR sess
 
 Startup also logs `[VIVE-SYNC]` lines that repeat SteamVR's D3D11 keyed-mutex steps inside the game. Include them in any bug report.
 
-> **Not yet proven:** the driver change and this build's start-up probe arrived in the same test session. The evidence points at the driver. Confirming it needs one run of the previous build (0.1.7-vive1) on the new driver; reports either way are welcome.
+> **Not yet proven:** the driver change and the start-up probe arrived in the same test session. The evidence points at the driver. Confirming it needs one run of an older build on the new driver; reports either way are welcome.
 
 ### HUD looks doubled or cross-eyed
 
-In-game: **F10 → HUD → Stereo depth** (on). In the config file: `xr_hud_stereo_depth=1` in `bin\x64\vrport.ini`. The Vive installer sets it on.
+Upstream 0.1.8 turned **HUD stereo depth** on by default, which is the fix: the HUD is one flat panel hanging about 1.5 m in front of you instead of two copies at optical infinity. If you upgraded with an older `vrport.ini` that has `xr_hud_stereo_depth=0`, the Vive installer sets it to 1. It is also under **F10 → HUD → Stereo depth**. `xr_hud_distance` and `xr_hud_fov` set how far away and how large the panel is.
 
-- **On:** the HUD is one flat panel hanging about 1.5 m in front of you (`xr_hud_distance`). It shows real depth.
-- **Off (upstream default):** each eye gets its own copy, shifted so the HUD sits at optical infinity, behind everything it covers. On a Vive this reads as a doubled, cross-eyed HUD as soon as you look at anything nearby.
-
-`xr_hud_distance` and `xr_hud_fov` in the same menu set how far away and how large the panel is.
+0.1.8 also lists fixes for popups and quest markers that doubled the picture. If some in-world markers (shop or objective markers) still look doubled on a Vive, please report it with a `Capture-Eye-Images.cmd` capture taken about 3 m from the marker.
 
 ### Other checks
 
@@ -96,7 +95,7 @@ Vive and Vive Pro owners often use Index controllers. Two things were wrong with
 | Left stick click + right stick | D-pad (existing chord) |
 | Both stick clicks | the mod's F10 overlay (existing) |
 
-You can also rebind per game in SteamVR: *Settings > Controllers > Show Old Binding UI* (or the bindings page) > Cyberpunk 2077.
+You can also rebind per game in SteamVR: the controller bindings page for Cyberpunk 2077.
 
 **Hands were at the wrong angle.** Every hand, arm and weapon calculation was tuned on Touch controllers. SteamVR places the Index grip differently: 9.7° pitch and about 14 cm back from the tracking origin, against Touch's 20.6° and about 10 cm. The build now asks the runtime which controller is in your hand and shifts the Index grip to the Touch-equivalent pose. The numbers come from SteamVR's own render-model files, and `tools/vive_tests` checks that the corrected Index grip equals the Touch grip exactly.
 
@@ -105,27 +104,27 @@ Look for these lines in `bin\x64\cyberpunkvrport.log`:
 - `[GRIP] controller profile /interaction_profiles/valve/index_controller ... grip corrected` — the correction is active.
 - `[GRIP] hand N raw grip-vs-aim angle X deg` — a measurement. SteamVR's data predicts about **50°** for Index and **60°** for Touch. If an Index reports something else, the table in `include/Runtimes/ControllerGrip.hpp` doesn't match what your runtime sends; please post the number.
 
-If the hands still look rotated, the existing **Wrist** sliders in the F10 overlay (Calibration) still apply on top.
+If the hands still look rotated, the **Wrist** sliders in the F10 overlay still apply on top. 0.1.8 stores wrist rotations as offsets from its tuned base, so they read 0 at the start.
 
 To add another controller, add one entry to `kControllerGrips` in `ControllerGrip.hpp` (the file's header explains where to find the numbers).
 
 ## Adding another headset
 
-A headset preset only chooses the per-eye render size. FOV, IPD, eye poses and controller bindings all come from the OpenXR runtime. The step-by-step method, with the Vive numbers worked through as an example, is the comment block **"HOW TO ADD A HEADSET"** above `kHmdPresets` in `src/Overlay/LauncherDialog.cpp`. In short:
+A headset preset only chooses the per-eye render size. FOV, IPD, eye poses and controller bindings all come from the OpenXR runtime. Since 0.1.8 each eye renders exactly its own lens window, so the number that matters is the window's shape. The step-by-step method, with the Vive numbers worked through, is the comment block **"HOW TO ADD A HEADSET"** above `kHmdPresets` in `src/Overlay/LauncherDialog.cpp`. In short:
 
 1. Run once with any preset and copy the `OpenXRManager[FOV]: raw left=(...) right=(...)` line from `bin\x64\cyberpunkvrport.log`.
-2. Compute `aspect = tan((|L|+R)/2) / tan(max(U,|D|))`.
-3. Pick sizes with that aspect that exist in `vrcam.json`'s `components` list.
-4. Add a resolution array and one `kHmdPresets` row with the next unused ID (17 and up). Never renumber existing IDs.
+2. Compute `window AR = (tan(outer) + tan(inner)) / (tan(up) + tan(down))`.
+3. Pick sizes with that shape that exist in `vrcam.json`'s `components` list, or add new ones with `tools/gen_vrcam_assets.py` and a WolvenKit repack.
+4. Add a resolution array and one `kHmdPresets` row with the next unused ID (18 and up). Never renumber existing IDs.
 5. Extend `tools/launcher_tests/main.cpp` and run it.
 
 ## For developers
 
-- `src/Overlay/LauncherDialog.cpp`: Vive (15) and Vive Pro (16) presets, plus the headset-authoring guide.
+- `src/Overlay/LauncherDialog.cpp`, `include/Core/HmdIds.hpp`: Vive (16) and Vive Pro (17) presets, plus the headset-authoring guide.
 - `src/Runtimes/SteamVrSyncProbe.cpp`: the start-up keyed-mutex probe and the SteamVR delivery check, including what the disassembly of `vrclient_x64.dll` showed.
 - `src/Runtimes/HudQuad.cpp`: notes on the two HUD placement modes.
 - `include/Runtimes/ControllerGrip.hpp`: per-controller grip correction (Index today), with the recipe for adding more; Index bindings are in `OpenXRManager.cpp`.
-- `include/Runtimes/RuntimeFovCorrection.hpp`, `src/Runtimes/OpenXRFrameLoop.cpp`: centred submitted FOV and aspect-correct menu quads (from 0.1.7-vive1).
+- `include/Runtimes/RuntimeFovCorrection.hpp`, `src/Runtimes/OpenXRFrameLoop.cpp`: aspect-correct menu quads, which upstream still draws square.
 - `src/Render/EyeImageCapture.cpp`, `scripts/capture_vive.ps1`: one-shot capture of both eye images for Vive presets.
 - `tools/xr_probe/vive_pattern.cpp`: standalone D3D12/OpenXR checkerboard. Use it to check that the headset and runtime work without the game.
-- Tests: `tools/launcher_tests` (preset IDs, ladders, save/reload) and `tools/vive_tests`.
+- Tests: `tools/launcher_tests` (preset IDs, ladders, save/reload, migration of old saves) and `tools/vive_tests`.

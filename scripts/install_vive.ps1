@@ -1,9 +1,11 @@
-# Installs the Vive build over an existing CyberpunkVRPort 0.1.7 install, with a byte-for-byte backup
-# that restore_vive.ps1 can put back. -Headset picks the launcher preset (see LauncherDialog.cpp):
-#   Vive    -> hmd_type 15, HTC Vive (Original)
-#   VivePro -> hmd_type 16, HTC Vive Pro
-# Both default to 1800x2000 per eye and to xr_hud_stereo_depth=1 (HUD as one real panel in front of
-# you; 0 shows it at optical infinity, which reads as a doubled, cross-eyed HUD on these headsets).
+# Installs the Vive build over an existing CyberpunkVRPort 0.1.8 install (install upstream's 0.1.8 first),
+# with a byte-for-byte backup that restore_vive.ps1 can put back. -Headset picks the launcher preset
+# (see LauncherDialog.cpp and Core/HmdIds.hpp):
+#   Vive    -> hmd_type 16, HTC Vive (Original)
+#   VivePro -> hmd_type 17, HTC Vive Pro
+# Both default to 1816x1976 per eye (the Valve Index size in the 0.1.8 camera archive that costs the same as
+# the 1800x2000 they were tested at) and to xr_hud_stereo_depth=1 (HUD as one real panel in front of you;
+# 0 shows it at optical infinity, which reads as a doubled, cross-eyed HUD on these headsets).
 param(
     [Parameter(Mandatory=$true)][string]$GameRoot,
     [ValidateSet('Vive','VivePro')][string]$Headset = 'Vive',
@@ -16,8 +18,8 @@ $GameRoot = (Resolve-Path -LiteralPath $GameRoot).Path
 $DllPath = (Resolve-Path -LiteralPath $DllPath).Path
 if (-not (Test-Path -LiteralPath (Join-Path $GameRoot 'bin\x64\Cyberpunk2077.exe'))) { throw 'Game executable missing.' }
 $archive = Join-Path $GameRoot 'archive\pc\mod\cyberpunkvrport.archive'
-if ((Get-FileHash -LiteralPath $archive).Hash -ne 'EDED1057AA7DF6E8DA31CB77F9BF06ABC7B06B675F852C8FF3E2AEFB7D31445C') {
-    throw 'This update requires the checked 0.1.7 camera archive. Installation stopped before changing files.'
+if ((Get-FileHash -LiteralPath $archive).Hash -ne 'E80E69FCC64E447851BAF48E3CE4DDCA7057C1CA34EA99766D0C540EC2018D28') {
+    throw 'This update requires the stock CyberpunkVRPort 0.1.8 camera archive. Install upstream 0.1.8 first. Nothing was changed.'
 }
 $utf8 = New-Object Text.UTF8Encoding $false
 function Set-IniValues([string]$Text, [System.Collections.IDictionary]$Values) {
@@ -33,9 +35,9 @@ $launcherRel = 'bin\x64\vrport-launcher.ini'
 $configRel = 'bin\x64\vrport.ini'
 $cameraRel = 'bin\x64\plugins\cyber_engine_tweaks\mods\CyberpunkVRPort_Stereo\vrcam.json'
 $pluginRel = 'red4ext\plugins\CyberpunkVR_Stereo\CyberpunkVR_Stereo.dll'
-$hmdType = if ($Headset -eq 'VivePro') { '16' } else { '15' }
+$hmdType = if ($Headset -eq 'VivePro') { '17' } else { '16' }
 $launcher = Set-IniValues ([IO.File]::ReadAllText((Join-Path $GameRoot $launcherRel))) ([ordered]@{
-    width='1800'; height='2000'; hmd_type=$hmdType; debug='0'; show_launcher='1'
+    width='1816'; height='1976'; hmd_type=$hmdType; debug='0'; show_launcher='1'
 })
 $config = Set-IniValues ([IO.File]::ReadAllText((Join-Path $GameRoot $configRel))) ([ordered]@{
     xr_runtime='1'; xr_force_fov='0.000'; xr_world_scale='1.000'; xr_ipd_scale='1.000';
@@ -45,9 +47,9 @@ $config = Set-IniValues ([IO.File]::ReadAllText((Join-Path $GameRoot $configRel)
 })
 $cameraText = [IO.File]::ReadAllText((Join-Path $GameRoot $cameraRel))
 $camera = $cameraText | ConvertFrom-Json
-if ($camera.components -notcontains 'vrcam_1800x2000') { throw '1800x2000 camera missing from installed catalogue.' }
-$cameraText = [regex]::Replace($cameraText, '("component"\s*:\s*")[^"]*(")', '${1}vrcam_1800x2000${2}')
-$cameraText = [regex]::Replace($cameraText, '("virtualCamera"\s*:\s*")[^"]*(")', '${1}vrcam_feed_1800x2000${2}')
+if ($camera.components -notcontains 'vrcam_1816x1976') { throw '1816x1976 camera missing from installed catalogue.' }
+$cameraText = [regex]::Replace($cameraText, '("component"\s*:\s*")[^"]*(")', '${1}vrcam_1816x1976${2}')
+$cameraText = [regex]::Replace($cameraText, '("virtualCamera"\s*:\s*")[^"]*(")', '${1}vrcam_feed_1816x1976${2}')
 $backup = Join-Path ([IO.Path]::GetFullPath($BackupRoot)) ('before-vive-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff'))
 New-Item -ItemType Directory -Path $backup -Force | Out-Null
 $entries = @()
@@ -64,7 +66,7 @@ foreach ($rel in @($pluginRel,$launcherRel,$configRel,$cameraRel)) {
     }
     $entries += [pscustomobject]@{RelativePath=$rel; Existed=$exists; OriginalHash=$hash; InstalledHash=$null}
 }
-$manifest = [pscustomobject]@{GameRoot=$GameRoot; Build='0.1.7-vive2'; Files=$entries}
+$manifest = [pscustomobject]@{GameRoot=$GameRoot; Build='0.1.8-vive1'; Files=$entries}
 $manifestPath = Join-Path $backup 'manifest.json'
 [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 5), $utf8)
 try {
@@ -83,6 +85,6 @@ try {
     }
     throw
 }
-Write-Host "Installed 0.1.7-vive2: $Headset (hmd_type $hmdType), 1800x2000, SteamVR OpenXR, HUD as a panel, frame generation off."
+Write-Host "Installed 0.1.8-vive1: $Headset (hmd_type $hmdType), 1816x1976, SteamVR OpenXR, HUD as a panel, frame generation off."
 Write-Host "Verified DLL SHA256: $((Get-FileHash -LiteralPath $DllPath).Hash)"
 Write-Host "Restore manifest: $manifestPath"
