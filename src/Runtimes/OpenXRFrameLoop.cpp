@@ -1186,6 +1186,7 @@ DWORD OpenXRManager::FrameThreadMain() {
             m_menuFollow.Reset();
             m_menuClock.Reset();
             m_menuEyeAnchorValid = false;
+            m_menuPosValid = false;
         }
         const bool monoReady = monoEnabled && EnsureMonoSubmitResources() && !m_eyeSwapchains.empty();
         if (monoReady && !m_views.empty()) {
@@ -1340,6 +1341,7 @@ DWORD OpenXRManager::FrameThreadMain() {
                 m_menuFollow.Reset();
                 m_menuClock.Reset();
                 m_menuEyeAnchorValid = false;
+                m_menuPosValid = false;
             }
             // HEAD SMOOTHING IS OFF BY DEFAULT, AND THAT IS NOT A TASTE CALL.
             //
@@ -1726,11 +1728,30 @@ DWORD OpenXRManager::FrameThreadMain() {
                     constexpr uint16_t XB_RIGHT_SHOULDER = 0x0200;
                     constexpr uint16_t XB_LEFT_THUMB     = 0x0040;
                     constexpr uint16_t XB_RIGHT_THUMB    = 0x0080;
+                    constexpr uint16_t XB_START          = 0x0010;
+                    constexpr uint16_t XB_BACK           = 0x0020;
                     constexpr uint16_t XB_DPAD_UP        = 0x0001;
                     constexpr uint16_t XB_DPAD_DOWN      = 0x0002;
                     constexpr uint16_t XB_DPAD_LEFT     = 0x0004;
                     constexpr uint16_t XB_DPAD_RIGHT     = 0x0008;
                     (void)XB_LEFT_THUMB;
+
+                    // INDEX TRACKPAD AS TWO MENU BUTTONS. Index has no usable menu button (SteamVR keeps `system`
+                    // for its dashboard), so a firm press on the TOP part of a trackpad stands in for one:
+                    //     left  pad, top edge -> Back / View  (the pause menu: settings, save, quit)
+                    //     right pad, top edge -> Start        (the Hub: inventory, cyberware, map, journal)
+                    // Both are decided here from the pad's XY and its press force. Hysteresis keeps a press from
+                    // chattering as the thumb rolls: it takes force 0.5 and y 0.35 to start, and holds until the
+                    // force falls under 0.25 or the thumb leaves the upper area (y under 0.15).
+                    if (m_trackpadForceAction != XR_NULL_HANDLE) {
+                        static bool s_padHeld[2] = {false, false};
+                        float padX = 0.0f, padY = 0.0f;
+                        getVec2(m_trackpadAction, padX, padY);
+                        const float padForce = getFloat(m_trackpadForceAction);
+                        s_padHeld[i] = s_padHeld[i] ? (padForce > 0.25f && padY > 0.15f)
+                                                    : (padForce >= 0.5f && padY > 0.35f);
+                        if (s_padHeld[i]) ctrl.buttons |= (i == 0) ? XB_BACK : XB_START;
+                    }
 
                     if (i == 0) {
                         ctrl.leftTrigger = trig;

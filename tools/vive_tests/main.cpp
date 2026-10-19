@@ -124,10 +124,10 @@ void GripCorrection() {
         const float dot=std::abs(fixed.orientation.x*wanted.orientation.x+fixed.orientation.y*wanted.orientation.y+fixed.orientation.z*wanted.orientation.z+fixed.orientation.w*wanted.orientation.w);
         Check(dot>0.999999f,"corrected Index grip orientation != Touch grip");
     }
-    // The documented size of the difference: 10.9 degrees of pitch, about 4.6 cm of origin.
+    // The size of the difference: 5.3 degrees of pitch (measured Index 15.3 vs Touch 20.6), about 4.6 cm of origin.
     const auto c=cvr::grip::GripCorrection(index->grip[0],cvr::grip::kTouchGrip[0]);
     const float deg=2*std::asin(std::abs(c.orientation.x))/rad;
-    Check(std::abs(deg-10.9f)<0.01f,"Index->Touch pitch difference changed");
+    Check(std::abs(deg-5.3f)<0.01f,"Index->Touch pitch difference changed");
     std::cout<<"PASS Index grip correction maps the Index grip onto the Touch grip on both hands ("<<deg<<" deg pitch)\n";
 }
 int main()try {

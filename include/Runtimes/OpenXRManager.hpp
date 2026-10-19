@@ -943,6 +943,9 @@ private:
     XrAction m_secondaryButtonAction = XR_NULL_HANDLE;   // Bool, per hand (Y / B)
     XrAction m_menuButtonAction = XR_NULL_HANDLE;        // Bool, global menu/start action
     XrAction m_hapticAction = XR_NULL_HANDLE;            // Vibration OUTPUT, per hand
+    // Index trackpad, read as two extra buttons (top-edge press): see the Index note in OpenXRManager.cpp.
+    XrAction m_trackpadAction = XR_NULL_HANDLE;          // Vector2f, per hand
+    XrAction m_trackpadForceAction = XR_NULL_HANDLE;     // Float, per hand
     cvr::input::SteamFrameActions m_steamFrameActions{};
     XrPath m_handPaths[2] = { XR_NULL_PATH, XR_NULL_PATH };
     XrSpace m_handSpaces[2] = { XR_NULL_HANDLE, XR_NULL_HANDLE };
@@ -1391,6 +1394,8 @@ private:
     bool  m_menuEyeAnchorValid = false;// projection-path per-eye anchor latched
     float m_menuEyeAnchorYaw   = 0.0f; // head yaw the per-eye poses were latched at
     XrPosef m_menuQuadPose{};          // latched/eased quad-layer pose (m_localSpace)
+    XrVector3f m_menuPos{};            // where the panel hangs, dead-zone filtered; see ComputeMenuQuadPose
+    bool  m_menuPosValid = false;
     XrPosef m_menuEyePoses[2]{};       // latched per-eye poses for the projection path
 
     // Lazy-follow quad-layer menu pose from the live head pose (or base pose when the

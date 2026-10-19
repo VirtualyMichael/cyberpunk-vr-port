@@ -14,11 +14,17 @@
 //     SteamVR\drivers\indexcontroller\resources\rendermodels\valve_controller_knu_ev2_0_left\*.json
 //                                                                           "handgrip" (Index defines no openxr_grip,
 //                                                                           so SteamVR falls back to its handgrip)
-// Measured on the Vive Pro + Index test PC:
+// From those files:
 //
 //                      origin (m, x y z)            rotate_xyz (deg)
 //     Touch grip       (+-0.007, -0.0018, 0.1019)   (20.6, 0, 0)        +x is the controller's own side: left/right mirror
-//     Index grip       ( 0.000,  -0.0270, 0.1400)   ( 9.7, 0, 0)        the same on both hands
+//     Index handgrip   ( 0.000,  -0.0270, 0.1400)   ( 9.7, 0, 0)        the same on both hands
+//
+// THE INDEX PITCH IS MEASURED, NOT READ. The file says 9.7 deg, but on a Vive Pro + Index test PC the runtime's
+// own grip and aim poses were 55.5 deg apart (the [GRIP] log line), where the file predicts 49.9 deg and Touch
+// gives 60.0. With the aim at -40 deg that puts the Index grip the runtime really sends at about 15.3 deg of
+// pitch, so that is the value below; the origin is still the file's. If your Index logs another angle, the pitch
+// here is the one number to change.
 //
 // Both live in the SAME device frame, so the grip the rest of the mod expects is reachable from the grip we
 // are handed by one fixed transform in grip-local space:
@@ -63,7 +69,7 @@ struct ControllerGripDef {
 
 inline constexpr ControllerGripDef kControllerGrips[] = {
     {"/interaction_profiles/valve/index_controller", "Valve Index (Knuckles)",
-     {{{0.0f, -0.027f, 0.14f}, 9.7f}, {{0.0f, -0.027f, 0.14f}, 9.7f}}},
+     {{{0.0f, -0.027f, 0.14f}, 15.3f}, {{0.0f, -0.027f, 0.14f}, 15.3f}}},
 };
 
 inline XrQuaternionf PitchQuat(float degrees) {

@@ -744,6 +744,8 @@ bool OpenXRManager::Init() {
             makeAction(m_primaryButtonAction,   XR_ACTION_TYPE_BOOLEAN_INPUT,  "primary_button",   "Primary Button (A/X)", true);
             makeAction(m_secondaryButtonAction, XR_ACTION_TYPE_BOOLEAN_INPUT,  "secondary_button", "Secondary Button (B/Y)", true);
             makeAction(m_menuButtonAction,      XR_ACTION_TYPE_BOOLEAN_INPUT,  "menu",             "Menu Button",          false);
+            makeAction(m_trackpadAction,        XR_ACTION_TYPE_VECTOR2F_INPUT, "trackpad",         "Trackpad",             true);
+            makeAction(m_trackpadForceAction,   XR_ACTION_TYPE_FLOAT_INPUT,    "trackpad_force",   "Trackpad Press",       true);
             // HAPTICS: an OUTPUT action (Runtimes/Haptics.cpp). Bound inside each profile's one
             // suggest call below, because xrSuggestInteractionProfileBindings REPLACES a profile's
             // suggestions -- a second call for the haptic alone would drop every input binding.
@@ -848,22 +850,28 @@ bool OpenXRManager::Init() {
             { m_hapticAction,          "/user/hand/right/output/haptic" },
         });
 
-        // -- Valve Index (Knuckles): A/B on both hands, TRACKPAD PRESS as the menu/Start button --
+        // -- Valve Index (Knuckles): A/B on both hands, TRACKPAD TOP-EDGE PRESS as the two menu buttons --
         //
         // Index has no menu button. The one that looks like it is /input/system/click, and that is the
         // button SteamVR keeps for its own dashboard: applications never receive it, so binding Start to it
-        // (as this used to) left the title screen's "press Start to continue" and the pause menu with no
-        // way in. Each trackpad is pressed by deliberately squeezing it, which is hard to do by accident,
-        // so a press of EITHER trackpad is Start. The trackpad's XY stays free for later use.
+        // (as this used to) left the title screen and the menus with no way in.
         //
-        // A boolean action bound to a float input (trackpad/force) is thresholded by the runtime. If a
-        // runtime rejects that, the second suggestion drops the trackpad bindings so every other Index
+        // The trackpads are used instead, the way a D-pad is: the trackpad's XY and its press force are read
+        // as two plain inputs, and the frame loop turns a firm press on the TOP part of a trackpad into a
+        // button (see "INDEX TRACKPAD" in OpenXRFrameLoop.cpp):
+        //     left  trackpad, top edge ..... Back / View   (the game's pause menu: settings, save, quit)
+        //     right trackpad, top edge ..... Start         (the game's Hub: inventory, cyberware, map ...)
+        // A press anywhere else on the pad does nothing, so resting a thumb or sliding it is safe.
+        //
+        // The two are plain actions, not boolean bindings of a float, so no runtime has to threshold anything.
+        // If a runtime rejects the trackpad paths the second suggestion drops them, and every other Index
         // binding still works -- a rejected suggestion would otherwise discard the whole list.
         //
         // Layout on Index (SteamVR also lets you rebind per game: Controller Settings > Cyberpunk 2077):
         //   trigger / grip / thumbstick / thumbstick click ... as on Touch
         //   A, B (each hand) ................................ left: X, Y   right: A, B
-        //   trackpad press (either hand) .................... Start / menu
+        //   left trackpad, top edge ......................... Back / pause menu
+        //   right trackpad, top edge ........................ Start / Hub
         //   left stick click + right stick ................. D-pad (existing chord)
         //   both stick clicks ............................... the mod's F10 overlay (existing)
         if (XR_FAILED(suggest("/interaction_profiles/valve/index_controller", {
@@ -883,12 +891,14 @@ bool OpenXRManager::Init() {
             { m_primaryButtonAction,   "/user/hand/right/input/a/click" },
             { m_secondaryButtonAction, "/user/hand/left/input/b/click" },
             { m_secondaryButtonAction, "/user/hand/right/input/b/click" },
-            { m_menuButtonAction,      "/user/hand/left/input/trackpad/force" },
-            { m_menuButtonAction,      "/user/hand/right/input/trackpad/force" },
+            { m_trackpadAction,        "/user/hand/left/input/trackpad" },
+            { m_trackpadAction,        "/user/hand/right/input/trackpad" },
+            { m_trackpadForceAction,   "/user/hand/left/input/trackpad/force" },
+            { m_trackpadForceAction,   "/user/hand/right/input/trackpad/force" },
             { m_hapticAction,          "/user/hand/left/output/haptic" },
             { m_hapticAction,          "/user/hand/right/output/haptic" },
         }))) {
-        Log("OpenXRManager[Input]: Index trackpad-as-menu was rejected; re-suggesting without it.\n");
+        Log("OpenXRManager[Input]: Index trackpad menu buttons were rejected; re-suggesting without them.\n");
         suggest("/interaction_profiles/valve/index_controller", {
             { m_handPoseAction,        "/user/hand/left/input/grip/pose" },
             { m_handPoseAction,        "/user/hand/right/input/grip/pose" },
@@ -1368,14 +1378,35 @@ XrPosef OpenXRManager::ComputeMenuQuadPose(bool headPoseLocated, const XrPosef& 
     m_menuClock.Step(displayTime);
     const float cone=std::clamp(GetMenuFollowDeg(),5.0f,90.0f)*0.01745329252f;
     const float yaw=m_menuFollow.Update(headYaw,cone,m_menuClock.elapsed,true);
-    // Translation continues to follow the head; only yaw has a free-look cone.
+    // POSITION: follows the head, but through a DEAD ZONE.
+    //
+    // The panel used to be placed 1.5 m ahead of the head's exact position on every frame. A panel locked to
+    // the head position repeats every bit of tracking noise and prediction error as a small back-and-forth
+    // shake of the whole menu -- which is what the flat menus (main, pause, settings) looked like on a
+    // lighthouse headset. Now the panel stays where it is while the head stays within kMenuDeadZone of the
+    // point it hangs from, and once the head leaves that zone the panel eases after it (time constant
+    // kMenuFollowSeconds), so walking around or leaning far still brings the menu with you.
+    constexpr float kMenuDeadZone = 0.06f;        // metres of head movement the panel ignores
+    constexpr float kMenuFollowSeconds = 0.35f;   // how quickly it catches up beyond that
+    if (!m_menuPosValid) {
+        m_menuPos = ref.position;
+        m_menuPosValid = true;
+    } else {
+        const float dx = ref.position.x - m_menuPos.x, dy = ref.position.y - m_menuPos.y, dz = ref.position.z - m_menuPos.z;
+        const float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+        if (std::isfinite(dist) && dist > kMenuDeadZone) {
+            const float dt = std::clamp(m_menuClock.elapsed, 0.0f, 0.05f);
+            const float step = (dist - kMenuDeadZone) * (1.0f - std::exp(-dt / kMenuFollowSeconds)) / dist;
+            m_menuPos.x += dx * step; m_menuPos.y += dy * step; m_menuPos.z += dz * step;
+        }
+    }
     const XrQuaternionf qYaw = {0.0f, sinf(yaw * 0.5f), 0.0f, cosf(yaw * 0.5f)};
     const XrVector3f rotatedFwd = RotateVector(qYaw, XrVector3f{0.0f, 0.0f, -1.5f});
     XrPosef pose{};
     pose.orientation = qYaw;
-    pose.position.x = ref.position.x + rotatedFwd.x;
-    pose.position.y = ref.position.y + rotatedFwd.y;
-    pose.position.z = ref.position.z + rotatedFwd.z;
+    pose.position.x = m_menuPos.x + rotatedFwd.x;
+    pose.position.y = m_menuPos.y + rotatedFwd.y;
+    pose.position.z = m_menuPos.z + rotatedFwd.z;
     m_menuQuadPose = pose;
     return pose;
 }
