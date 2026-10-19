@@ -45,6 +45,18 @@ $config = Set-IniValues ([IO.File]::ReadAllText((Join-Path $GameRoot $configRel)
     xr_pose_lag='1'; xr_framegen='0'; xr_motion_predict_ms='0.00'; xr_menu_rect='0'; first_launch='0';
     xr_hud_stereo_depth='1'
 })
+# 0.1.8 made the interaction and loot panels head-locked (cone 0, 2 m, FOV 75), but only for NEW installs: an
+# older vrport.ini keeps the 0.1.7 values (a 90 degree cone and 1.5 m), which leaves the panel hanging where you
+# were first facing -- so the prompt for an elevator or a vending machine is simply out of view. Replace those
+# four ONLY while they still hold the old defaults, so anything you set yourself is left alone.
+$oldDefaults = [ordered]@{ xr_interaction_follow_deg = @('90.000', '0.000'); xr_loot_follow_deg = @('10.000', '0.000');
+                           xr_interaction_distance = @('1.500', '2.000'); xr_interaction_fov = @('65.400', '75.000') }
+foreach ($key in $oldDefaults.Keys) {
+    $m = [regex]::Match($config, '(?m)^\s*' + [regex]::Escape($key) + '\s*=\s*(\S+)\s*$')
+    if ($m.Success -and ([double]$m.Groups[1].Value) -eq ([double]$oldDefaults[$key][0])) {
+        $config = Set-IniValues $config ([ordered]@{ $key = $oldDefaults[$key][1] })
+    }
+}
 $cameraText = [IO.File]::ReadAllText((Join-Path $GameRoot $cameraRel))
 $camera = $cameraText | ConvertFrom-Json
 if ($camera.components -notcontains 'vrcam_1816x1976') { throw '1816x1976 camera missing from installed catalogue.' }

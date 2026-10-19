@@ -1751,6 +1751,55 @@ DWORD OpenXRManager::FrameThreadMain() {
                         s_padHeld[i] = s_padHeld[i] ? (padForce > 0.25f && padY > 0.15f)
                                                     : (padForce >= 0.5f && padY > 0.35f);
                         if (s_padHeld[i]) ctrl.buttons |= (i == 0) ? XB_BACK : XB_START;
+
+                        // SLIDE TO SCROLL. Picking a floor, a dialogue line or a vending item from the game's
+                        // interaction list means D-pad up/down, and on Index the only D-pad is the stick chord.
+                        // So while an interaction prompt is actually on screen, sliding a thumb up or down on
+                        // a trackpad (touching, NOT pressing) steps the list one entry per 30% of pad travel,
+                        // like a scroll wheel. It is gated on the prompt so a thumb brushing the pad in normal
+                        // play cannot change quick slots. Each step holds the D-pad bit for 90 ms so the
+                        // game's input poll, which is slower than the XR loop, cannot miss it.
+                        static float s_prevY[2] = {0.0f, 0.0f}, s_travel[2] = {0.0f, 0.0f};
+                        static bool s_touching[2] = {false, false};
+                        static uint64_t s_stepUntilMs[2] = {0, 0};
+                        static uint16_t s_stepBit[2] = {0, 0};
+                        const uint64_t nowMs = GetTickCount64();
+                        const bool touching = (std::fabs(padX) + std::fabs(padY)) > 0.02f;
+                        const auto prompt = cvr::hud::Latest(cvr::hud::Channel::Interaction);
+                        const bool promptShown = prompt && !prompt->empty && nowMs - prompt->stamp < 300;
+                        if (touching && s_touching[i] && promptShown && !s_padHeld[i]) {
+                            s_travel[i] += padY - s_prevY[i];
+                            if (s_travel[i] > 0.30f)       { s_stepBit[i] = XB_DPAD_UP;   s_stepUntilMs[i] = nowMs + 90; s_travel[i] = 0.0f; }
+                            else if (s_travel[i] < -0.30f) { s_stepBit[i] = XB_DPAD_DOWN; s_stepUntilMs[i] = nowMs + 90; s_travel[i] = 0.0f; }
+                        } else if (!touching || !promptShown) {
+                            s_travel[i] = 0.0f;
+                        }
+                        s_prevY[i] = padY;
+                        s_touching[i] = touching;
+                        if (nowMs < s_stepUntilMs[i]) ctrl.buttons |= s_stepBit[i];
+
+                        // RECENTER FROM THE CONTROLLERS. Hold the BOTTOM edge of both trackpads (both pressed, thumbs
+                        // low) for one second to re-base your body under your head: the same recenter as F7. Without
+                        // it, the only way back from a body that drifted away from the headset was a keyboard key or
+                        // a save reload. Bottom edge only, so it can never collide with the top-edge menu buttons.
+                        static bool s_bottomHeld[2] = {false, false};
+                        static uint64_t s_bothSinceMs = 0;
+                        static bool s_recenterFired = false;
+                        s_bottomHeld[i] = s_bottomHeld[i] ? (padForce > 0.25f && padY < -0.15f)
+                                                          : (padForce >= 0.5f && padY < -0.35f);
+                        if (i == 1) {   // both hands have been read this cycle
+                            if (s_bottomHeld[0] && s_bottomHeld[1]) {
+                                if (!s_bothSinceMs) s_bothSinceMs = nowMs;
+                                if (!s_recenterFired && nowMs - s_bothSinceMs >= 1000) {
+                                    s_recenterFired = true;
+                                    Log("[recenter] both trackpad bottom edges held 1 s -> recenter\n");
+                                    RequestRecenter();
+                                }
+                            } else {
+                                s_bothSinceMs = 0;
+                                s_recenterFired = false;
+                            }
+                        }
                     }
 
                     if (i == 0) {

@@ -75,6 +75,16 @@ Upstream 0.1.8 turned **HUD stereo depth** on by default, which is the fix: the 
 
 0.1.8 also lists fixes for popups and quest markers that doubled the picture. If some in-world markers (shop or objective markers) still look doubled on a Vive, please report it with a `Capture-Eye-Images.cmd` capture taken about 3 m from the marker.
 
+### I can't use elevators, vending machines or other prompts
+
+First check the interaction panel is where you are looking. 0.1.8 made the interaction and loot panels head-locked, but only on fresh installs; an older `vrport.ini` keeps the 0.1.7 values, a 90° free-look cone and 1.5 m, which leaves the prompt hanging wherever you were first facing. The Vive installer replaces those four values while they still hold the old defaults (`xr_interaction_follow_deg=0`, `xr_loot_follow_deg=0`, `xr_interaction_distance=2`, `xr_interaction_fov=75`).
+
+Then, with the prompt in view: **left A** is the game's X / interact button, and **sliding a thumb up or down on a trackpad** scrolls the choices (elevator floors and the like). The left-stick-click plus right-stick chord still works as a D-pad too.
+
+### My body drifted away from my headset
+
+Hold the **bottom edge of both trackpads for one second** to recenter (or press F7). The log line `[recenter] both trackpad bottom edges held 1 s -> recenter` confirms it fired. If the body drifts again, note roughly how many minutes into the session and what you were doing, and send `bin\x64\cyberpunkvrport.log` (turn on `debug=1` in `vrport-launcher.ini` for detail).
+
 ### Other checks
 
 - Set SteamVR's per-app resolution for Cyberpunk to 100%. The mod picks its own render size.
@@ -84,14 +94,17 @@ Upstream 0.1.8 turned **HUD stereo depth** on by default, which is the fix: the 
 
 Vive and Vive Pro owners often use Index controllers. Two things were wrong with them, and both are handled in this build.
 
-**There is no usable menu button.** Index's button that looks like a menu button is `system`, which SteamVR keeps for its own dashboard. The game never receives it, so "press Start to continue" and the pause menu were unreachable. **Press either trackpad firmly** and the game sees Start.
+**There is no usable menu button.** Index's button that looks like a menu button is `system`, which SteamVR keeps for its own dashboard. The game never receives it, so the menus were unreachable. The trackpads stand in for the missing buttons: a firm press on the **top edge** of each pad, as in the table. A press anywhere else on a pad does nothing, so a resting thumb is safe.
 
 | Index control | In game |
 |---|---|
 | Trigger, grip, thumbstick, thumbstick click | as on Touch |
 | A / B, left hand | X / Y |
 | A / B, right hand | A / B |
-| **Either trackpad, pressed** | **Start / menu** |
+| **Right trackpad, top edge, pressed** | **Start / Hub** (inventory, cyberware, map, journal) |
+| **Left trackpad, top edge, pressed** | **Back / pause menu** (settings, save, quit) |
+| **Slide a thumb up or down on a trackpad** (touch, no press) | **Scroll the interaction list** (elevator floors, dialogue, vending items) while a prompt is on screen |
+| **Both trackpads, bottom edge, held 1 second** | **Recenter** your body under your head (same as F7) |
 | Left stick click + right stick | D-pad (existing chord) |
 | Both stick clicks | the mod's F10 overlay (existing) |
 

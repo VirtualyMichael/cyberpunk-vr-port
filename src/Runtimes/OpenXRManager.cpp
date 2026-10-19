@@ -872,6 +872,9 @@ bool OpenXRManager::Init() {
         //   A, B (each hand) ................................ left: X, Y   right: A, B
         //   left trackpad, top edge ......................... Back / pause menu
         //   right trackpad, top edge ........................ Start / Hub
+        //   slide a thumb up/down on a pad (touch, no press) ... scroll the interaction list (D-pad up/down),
+        //                                                      only while an interaction prompt is on screen
+        //   BOTH trackpads, bottom edge, held 1 s ........... recenter (same as F7)
         //   left stick click + right stick ................. D-pad (existing chord)
         //   both stick clicks ............................... the mod's F10 overlay (existing)
         if (XR_FAILED(suggest("/interaction_profiles/valve/index_controller", {
