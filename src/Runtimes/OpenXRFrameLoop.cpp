@@ -1513,6 +1513,7 @@ DWORD OpenXRManager::FrameThreadMain() {
                     m_hands[i].valid = false;
                     bool poseValid = false;
                     XrQuaternionf handRelOri{0,0,0,1};
+                    XrQuaternionf rawGripOri{0,0,0,1};   // as reported by the runtime, before CorrectGrip
                     if (poseState.isActive) {
                         XrSpaceLocation handLoc{XR_TYPE_SPACE_LOCATION};
                         XrResult locRes = xrLocateSpace(m_handSpaces[i], m_localSpace, handLocateTime, &handLoc);
@@ -1529,13 +1530,18 @@ DWORD OpenXRManager::FrameThreadMain() {
                                 // headForHands: the same head the offset is re-anchored on, at the
                                 // instant the hand was located at. See the note above the hand loop --
                                 // this reference disagreeing with itself was the shake.
+                                // The grip every consumer below was tuned for is a Touch grip. Index and
+                                // other controllers report a different point and tilt, so correct it here,
+                                // once, before anything reads it. No-op for Touch-family controllers.
+                                const XrPosef gripPose = CorrectGrip(i, handLoc.pose);
+                                rawGripOri = handLoc.pose.orientation;
                                 XrQuaternionf headInv = ConjugateQuat(headForHands.orientation);
                                 XrVector3f hrelPosWorld{};
-                                hrelPosWorld.x = handLoc.pose.position.x - headForHands.position.x;
-                                hrelPosWorld.y = handLoc.pose.position.y - headForHands.position.y;
-                                hrelPosWorld.z = handLoc.pose.position.z - headForHands.position.z;
+                                hrelPosWorld.x = gripPose.position.x - headForHands.position.x;
+                                hrelPosWorld.y = gripPose.position.y - headForHands.position.y;
+                                hrelPosWorld.z = gripPose.position.z - headForHands.position.z;
                                 XrVector3f hrelPos = RotateVector(headInv, hrelPosWorld);
-                                XrQuaternionf hrelOri = MultiplyQuat(headInv, handLoc.pose.orientation);
+                                XrQuaternionf hrelOri = MultiplyQuat(headInv, gripPose.orientation);
 
                                 // STAGE 3 of the shake census: the same head-relative position the solve
                                 // will read, but sampled HERE -- on the XR thread, once per cycle, on a
@@ -1570,7 +1576,7 @@ DWORD OpenXRManager::FrameThreadMain() {
                                 if (gameplayInputActive) {
                                     // Yaw of the controller relative to the recenter base
                                     // (= body forward). Used by hand-oriented locomotion.
-                                    handRelOri = MultiplyQuat(baseInv, handLoc.pose.orientation);
+                                    handRelOri = MultiplyQuat(baseInv, gripPose.orientation);
                                 }
                             }
                         }
@@ -1593,6 +1599,22 @@ DWORD OpenXRManager::FrameThreadMain() {
                         XrSpaceLocation aimLoc{XR_TYPE_SPACE_LOCATION};
                         if (XR_SUCCEEDED(xrLocateSpace(m_handAimSpaces[i], m_localSpace, handLocateTime, &aimLoc)) &&
                             (aimLoc.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT)) {
+                            {
+                                // MEASUREMENT, once per hand and profile: the angle between the RAW grip and the
+                                // aim pose is fixed by the controller's geometry. SteamVR's render-model data
+                                // predicts ~60 deg for Touch (grip +20.6, aim -39.4) and ~50 deg for Index
+                                // (handgrip +9.7, tip -40 / yaw 5). If the logged number differs, the grip
+                                // table in ControllerGrip.hpp does not match what the runtime really sends.
+                                static char s_loggedFor[2][96] = {};
+                                if (std::strcmp(s_loggedFor[i], m_controllerProfile) != 0 && m_controllerProfile[0]) {
+                                    strcpy_s(s_loggedFor[i], m_controllerProfile);
+                                    const auto& a = rawGripOri; const auto& b = aimLoc.pose.orientation;
+                                    float d = std::fabs(a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w);
+                                    if (d > 1.0f) d = 1.0f;
+                                    Log("[GRIP] hand %d raw grip-vs-aim angle %.1f deg (%s)\n", i,
+                                        2.0f * std::acos(d) * 57.2957795f, m_controllerProfile);
+                                }
+                            }
                             const XrQuaternionf q = MultiplyQuat(baseInv, aimLoc.pose.orientation);
                             // Same yaw extraction as GetHmdYawRelToBody so both
                             // HMD-locomotion and Hand-locomotion use the SAME

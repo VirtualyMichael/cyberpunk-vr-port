@@ -1,5 +1,6 @@
 #pragma once
 #include "Runtimes/SteamFrameInput.hpp"
+#include "Runtimes/ControllerGrip.hpp"
 #include "Framegen/Presenter.hpp"
 #include "Framegen/StatsOverlay.hpp"
 #include "Overlay/VrPanel.hpp"
@@ -871,6 +872,13 @@ private:
     bool AcquireFrameLoop(FrameLoopOwner who, unsigned int timeoutMs);
     void ReleaseFrameLoop(FrameLoopOwner who);
     void PollEvents();
+    // Controller grip correction (see Runtimes/ControllerGrip.hpp). The correction is written for both
+    // hands BEFORE m_gripDef is published, so a reader that sees a non-null def sees finished data.
+    void RefreshControllerProfile();
+    XrPosef CorrectGrip(int hand, const XrPosef& pose) const;
+    std::atomic<const cvr::grip::ControllerGripDef*> m_gripDef{nullptr};
+    XrPosef m_gripCorrection[2]{};
+    char m_controllerProfile[96]{};
     bool BeginSession();
     void EndSession();
     bool EnsureMonoSubmitResources();

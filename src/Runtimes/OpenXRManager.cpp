@@ -754,9 +754,9 @@ bool OpenXRManager::Init() {
 
         struct Bind { XrAction action; const char* path; };
 
-        auto suggest = [&](const char* profileStr, std::initializer_list<Bind> list) {
+        auto suggest = [&](const char* profileStr, std::initializer_list<Bind> list) -> XrResult {
             XrPath profile = XR_NULL_PATH;
-            if (XR_FAILED(xrStringToPath(m_instance, profileStr, &profile))) return;
+            if (XR_FAILED(xrStringToPath(m_instance, profileStr, &profile))) return XR_ERROR_PATH_UNSUPPORTED;
             std::vector<XrActionSuggestedBinding> v;
             v.reserve(list.size());
             for (const Bind& b : list) {
@@ -771,6 +771,7 @@ bool OpenXRManager::Init() {
             sb.countSuggestedBindings = static_cast<uint32_t>(v.size());
             XrResult r = xrSuggestInteractionProfileBindings(m_instance, &sb);
             Log("OpenXRManager[Input]: suggest bindings %s -> %d (count=%u)\n", profileStr, r, sb.countSuggestedBindings);
+            return r;
         };
 
         if (!inputActionsEnabled) {
@@ -844,7 +845,45 @@ bool OpenXRManager::Init() {
             { m_menuButtonAction,      "/user/hand/left/input/menu/click" },
         });
 
-        // -- Valve Index: A/B on both hands, system as menu --
+        // -- Valve Index (Knuckles): A/B on both hands, TRACKPAD PRESS as the menu/Start button --
+        //
+        // Index has no menu button. The one that looks like it is /input/system/click, and that is the
+        // button SteamVR keeps for its own dashboard: applications never receive it, so binding Start to it
+        // (as this used to) left the title screen's "press Start to continue" and the pause menu with no
+        // way in. Each trackpad is pressed by deliberately squeezing it, which is hard to do by accident,
+        // so a press of EITHER trackpad is Start. The trackpad's XY stays free for later use.
+        //
+        // A boolean action bound to a float input (trackpad/force) is thresholded by the runtime. If a
+        // runtime rejects that, the second suggestion drops the trackpad bindings so every other Index
+        // binding still works -- a rejected suggestion would otherwise discard the whole list.
+        //
+        // Layout on Index (SteamVR also lets you rebind per game: Controller Settings > Cyberpunk 2077):
+        //   trigger / grip / thumbstick / thumbstick click ... as on Touch
+        //   A, B (each hand) ................................ left: X, Y   right: A, B
+        //   trackpad press (either hand) .................... Start / menu
+        //   left stick click + right stick ................. D-pad (existing chord)
+        //   both stick clicks ............................... the mod's F10 overlay (existing)
+        if (XR_FAILED(suggest("/interaction_profiles/valve/index_controller", {
+            { m_handPoseAction,        "/user/hand/left/input/grip/pose" },
+            { m_handPoseAction,        "/user/hand/right/input/grip/pose" },
+            { m_handAimPoseAction,     "/user/hand/left/input/aim/pose" },
+            { m_handAimPoseAction,     "/user/hand/right/input/aim/pose" },
+            { m_thumbstickAction,      "/user/hand/left/input/thumbstick" },
+            { m_thumbstickAction,      "/user/hand/right/input/thumbstick" },
+            { m_thumbstickClickAction, "/user/hand/left/input/thumbstick/click" },
+            { m_thumbstickClickAction, "/user/hand/right/input/thumbstick/click" },
+            { m_triggerAction,         "/user/hand/left/input/trigger/value" },
+            { m_triggerAction,         "/user/hand/right/input/trigger/value" },
+            { m_gripAction,            "/user/hand/left/input/squeeze/value" },
+            { m_gripAction,            "/user/hand/right/input/squeeze/value" },
+            { m_primaryButtonAction,   "/user/hand/left/input/a/click" },
+            { m_primaryButtonAction,   "/user/hand/right/input/a/click" },
+            { m_secondaryButtonAction, "/user/hand/left/input/b/click" },
+            { m_secondaryButtonAction, "/user/hand/right/input/b/click" },
+            { m_menuButtonAction,      "/user/hand/left/input/trackpad/force" },
+            { m_menuButtonAction,      "/user/hand/right/input/trackpad/force" },
+        }))) {
+        Log("OpenXRManager[Input]: Index trackpad-as-menu was rejected; re-suggesting without it.\n");
         suggest("/interaction_profiles/valve/index_controller", {
             { m_handPoseAction,        "/user/hand/left/input/grip/pose" },
             { m_handPoseAction,        "/user/hand/right/input/grip/pose" },
@@ -862,8 +901,8 @@ bool OpenXRManager::Init() {
             { m_primaryButtonAction,   "/user/hand/right/input/a/click" },
             { m_secondaryButtonAction, "/user/hand/left/input/b/click" },
             { m_secondaryButtonAction, "/user/hand/right/input/b/click" },
-            { m_menuButtonAction,      "/user/hand/left/input/system/click" },
         });
+        }
 
         // -- HTC Vive Wand: no A/B/X/Y, no thumbstick (touchpad as v2f), grip is bool --
         suggest("/interaction_profiles/htc/vive_controller", {
@@ -1064,8 +1103,46 @@ void OpenXRManager::EndSession() {
     Log("OpenXRManager: Session ended.\n");
 }
 
+// Asks the runtime which controller is actually in the left hand and, if its grip pose is known to differ
+// from Touch's, builds the correction both hands need. Called on the runtime's profile-changed event, and
+// every couple of seconds as a fallback because some runtimes only report a profile once it is in use.
+void OpenXRManager::RefreshControllerProfile() {
+    if (m_session == XR_NULL_HANDLE || m_handPaths[0] == XR_NULL_PATH) return;
+    XrInteractionProfileState state{XR_TYPE_INTERACTION_PROFILE_STATE};
+    if (XR_FAILED(xrGetCurrentInteractionProfile(m_session, m_handPaths[0], &state)) ||
+        state.interactionProfile == XR_NULL_PATH) return;
+    char name[sizeof(m_controllerProfile)]{};
+    uint32_t len = 0;
+    if (XR_FAILED(xrPathToString(m_instance, state.interactionProfile, sizeof(name), &len, name))) return;
+    if (std::strcmp(name, m_controllerProfile) == 0) return;   // unchanged
+    // Retract first so no reader pairs the new profile with the old correction.
+    m_gripDef.store(nullptr, std::memory_order_release);
+    strcpy_s(m_controllerProfile, name);
+    const cvr::grip::ControllerGripDef* def = cvr::grip::FindControllerGrip(name);
+    if (def) {
+        for (int h = 0; h < 2; ++h)
+            m_gripCorrection[h] = cvr::grip::GripCorrection(def->grip[h], cvr::grip::kTouchGrip[h]);
+        m_gripDef.store(def, std::memory_order_release);
+        Log("[GRIP] controller profile %s (%s): grip corrected to the Touch-equivalent pose. "
+            "left: dy=%.4f dz=%.4f m, pitch %.1f deg\n", name, def->name,
+            m_gripCorrection[0].position.y, m_gripCorrection[0].position.z,
+            def->grip[0].pitchDeg - cvr::grip::kTouchGrip[0].pitchDeg);
+    } else {
+        Log("[GRIP] controller profile %s: grip already Touch-equivalent, no correction.\n", name);
+    }
+}
+
+XrPosef OpenXRManager::CorrectGrip(int hand, const XrPosef& pose) const {
+    if (hand < 0 || hand > 1 || !m_gripDef.load(std::memory_order_acquire)) return pose;
+    return cvr::grip::ApplyGripCorrection(pose, m_gripCorrection[hand]);
+}
+
 void OpenXRManager::PollEvents() {
     if (m_instance == XR_NULL_HANDLE) return;
+    {
+        static unsigned s_tick = 0;
+        if ((++s_tick % 120) == 1) RefreshControllerProfile();
+    }
 
     XrEventDataBuffer event{XR_TYPE_EVENT_DATA_BUFFER};
     while (xrPollEvent(m_instance, &event) == XR_SUCCESS) {
@@ -1081,6 +1158,8 @@ void OpenXRManager::PollEvents() {
             } else if (m_sessionState == XR_SESSION_STATE_EXITING || m_sessionState == XR_SESSION_STATE_LOSS_PENDING) {
                 m_stopFrameThread.store(true, std::memory_order_relaxed);
             }
+        } else if (event.type == XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED) {
+            RefreshControllerProfile();
         } else if (event.type == XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING) {
             // Native OpenXR recenter (user held the home / system button, or used the runtime menu) —
             // the runtime is about to remap "forward" of its tracking space at changed->changeTime.
@@ -1857,6 +1936,7 @@ void OpenXRManager::FlushHandsToShared(const OpenXRHeadPose* frameHead, XrTime f
                         XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
                     if ((loc.locationFlags & kNeed) != kNeed) continue;
                     constexpr XrSpaceLocationFlags kTracked=XR_SPACE_LOCATION_POSITION_TRACKED_BIT|XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
+                    loc.pose = CorrectGrip(h, loc.pose);   // Touch-equivalent grip, see ControllerGrip.hpp
                     if(bodyFrame.valid){
                         const auto raw=RelativePose(bodyHeadPose,loc.pose);
                         bodyFrame.hands[h]=raw.position;bodyFrame.rotations[h]=raw.orientation;

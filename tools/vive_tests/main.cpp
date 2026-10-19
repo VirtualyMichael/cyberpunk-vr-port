@@ -13,6 +13,7 @@
 #include "Runtimes/OpenXRInternal.hpp"
 #include "Render/EyeImageCapture.hpp"
 #include "Render/CommandResources.hpp"
+#include "Runtimes/ControllerGrip.hpp"
 using Microsoft::WRL::ComPtr;
 volatile int g_verboseLog=0;
 extern "C" int CyberpunkVR_RuntimeDiagnostics=0;
@@ -112,8 +113,37 @@ void Capture(ID3D12Device* device,DXGI_FORMAT format,bool mismatch,unsigned test
     Check(json.find(mismatch?"[true,false]":"[true,true]")!=std::string::npos,"capture metadata comparison wrong");
     std::cout<<"PASS GPU capture format="<<int(format)<<" deliberate-mismatch="<<mismatch<<" (row pitch, pixels, fence, metadata)\n";
 }
+// A controller's grip, corrected, must equal the Touch grip exactly: pose_actual * G_actual^-1 * G_touch is the
+// Touch-equivalent pose of the SAME physical controller. Checked for an arbitrary device pose on both hands.
+void GripCorrection() {
+    const auto* index=cvr::grip::FindControllerGrip("/interaction_profiles/valve/index_controller");
+    Check(index!=nullptr,"Index grip entry missing");
+    Check(cvr::grip::FindControllerGrip("/interaction_profiles/oculus/touch_controller")==nullptr,"Touch must not be corrected");
+    for(int hand=0;hand<2;++hand) {
+        const XrQuaternionf deviceRot=[]{const float a=0.7f,b=-0.4f,c=1.1f;const XrQuaternionf qx{std::sin(a/2),0,0,std::cos(a/2)},qy{0,std::sin(b/2),0,std::cos(b/2)},qz{0,0,std::sin(c/2),std::cos(c/2)};return MultiplyQuat(MultiplyQuat(qy,qx),qz);}();
+        const XrPosef device{deviceRot,{0.3f,1.2f,-0.5f}};
+        // The grip each runtime would report = device * its local grip transform.
+        auto gripOf=[&](const cvr::grip::GripLocal& g){
+            const XrPosef local{cvr::grip::PitchQuat(g.pitchDeg),{g.origin[0],g.origin[1],g.origin[2]}};
+            const auto off=RotateVector(device.orientation,local.position);
+            return XrPosef{MultiplyQuat(device.orientation,local.orientation),{device.position.x+off.x,device.position.y+off.y,device.position.z+off.z}};
+        };
+        const auto reportedIndex=gripOf(index->grip[hand]);
+        const auto wanted=gripOf(cvr::grip::kTouchGrip[hand]);
+        const auto fixed=cvr::grip::ApplyGripCorrection(reportedIndex,cvr::grip::GripCorrection(index->grip[hand],cvr::grip::kTouchGrip[hand]));
+        auto close=[](float a,float b){return std::abs(a-b)<0.00002f;};
+        Check(close(fixed.position.x,wanted.position.x)&&close(fixed.position.y,wanted.position.y)&&close(fixed.position.z,wanted.position.z),"corrected Index grip position != Touch grip");
+        const float dot=std::abs(fixed.orientation.x*wanted.orientation.x+fixed.orientation.y*wanted.orientation.y+fixed.orientation.z*wanted.orientation.z+fixed.orientation.w*wanted.orientation.w);
+        Check(dot>0.999999f,"corrected Index grip orientation != Touch grip");
+    }
+    // The documented size of the difference: 10.9 degrees of pitch, about 4.6 cm of origin.
+    const auto c=cvr::grip::GripCorrection(index->grip[0],cvr::grip::kTouchGrip[0]);
+    const float deg=2*std::asin(std::abs(c.orientation.x))/rad;
+    Check(std::abs(deg-10.9f)<0.01f,"Index->Touch pitch difference changed");
+    std::cout<<"PASS Index grip correction maps the Index grip onto the Touch grip on both hands ("<<deg<<" deg pitch)\n";
+}
 int main()try {
-    Projection();ComPtr<ID3D12Debug> debug;
+    Projection();GripCorrection();ComPtr<ID3D12Debug> debug;
     if(SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug))))debug->EnableDebugLayer();
     ComPtr<IDXGIFactory6> factory;Hr(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));
     ComPtr<IDXGIAdapter1> adapter;Hr(factory->EnumAdapterByGpuPreference(0,DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,IID_PPV_ARGS(&adapter)));

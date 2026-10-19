@@ -81,6 +81,34 @@ In-game: **F10 → HUD → Stereo depth** (on). In the config file: `xr_hud_ster
 - Set SteamVR's per-app resolution for Cyberpunk to 100%. The mod picks its own render size.
 - PCs with a CPU iGPU and a dedicated GPU: in Windows Settings → Display → Graphics, set `Cyberpunk2077.exe` to the dedicated GPU, as SteamVR's own programs already are.
 
+## Valve Index (Knuckles) controllers
+
+Vive and Vive Pro owners often use Index controllers. Two things were wrong with them, and both are handled in this build.
+
+**There is no usable menu button.** Index's button that looks like a menu button is `system`, which SteamVR keeps for its own dashboard. The game never receives it, so "press Start to continue" and the pause menu were unreachable. **Press either trackpad firmly** and the game sees Start.
+
+| Index control | In game |
+|---|---|
+| Trigger, grip, thumbstick, thumbstick click | as on Touch |
+| A / B, left hand | X / Y |
+| A / B, right hand | A / B |
+| **Either trackpad, pressed** | **Start / menu** |
+| Left stick click + right stick | D-pad (existing chord) |
+| Both stick clicks | the mod's F10 overlay (existing) |
+
+You can also rebind per game in SteamVR: *Settings > Controllers > Show Old Binding UI* (or the bindings page) > Cyberpunk 2077.
+
+**Hands were at the wrong angle.** Every hand, arm and weapon calculation was tuned on Touch controllers. SteamVR places the Index grip differently: 9.7° pitch and about 14 cm back from the tracking origin, against Touch's 20.6° and about 10 cm. The build now asks the runtime which controller is in your hand and shifts the Index grip to the Touch-equivalent pose. The numbers come from SteamVR's own render-model files, and `tools/vive_tests` checks that the corrected Index grip equals the Touch grip exactly.
+
+Look for these lines in `bin\x64\cyberpunkvrport.log`:
+
+- `[GRIP] controller profile /interaction_profiles/valve/index_controller ... grip corrected` — the correction is active.
+- `[GRIP] hand N raw grip-vs-aim angle X deg` — a measurement. SteamVR's data predicts about **50°** for Index and **60°** for Touch. If an Index reports something else, the table in `include/Runtimes/ControllerGrip.hpp` doesn't match what your runtime sends; please post the number.
+
+If the hands still look rotated, the existing **Wrist** sliders in the F10 overlay (Calibration) still apply on top.
+
+To add another controller, add one entry to `kControllerGrips` in `ControllerGrip.hpp` (the file's header explains where to find the numbers).
+
 ## Adding another headset
 
 A headset preset only chooses the per-eye render size. FOV, IPD, eye poses and controller bindings all come from the OpenXR runtime. The step-by-step method, with the Vive numbers worked through as an example, is the comment block **"HOW TO ADD A HEADSET"** above `kHmdPresets` in `src/Overlay/LauncherDialog.cpp`. In short:
@@ -96,6 +124,7 @@ A headset preset only chooses the per-eye render size. FOV, IPD, eye poses and c
 - `src/Overlay/LauncherDialog.cpp`: Vive (15) and Vive Pro (16) presets, plus the headset-authoring guide.
 - `src/Runtimes/SteamVrSyncProbe.cpp`: the start-up keyed-mutex probe and the SteamVR delivery check, including what the disassembly of `vrclient_x64.dll` showed.
 - `src/Runtimes/HudQuad.cpp`: notes on the two HUD placement modes.
+- `include/Runtimes/ControllerGrip.hpp`: per-controller grip correction (Index today), with the recipe for adding more; Index bindings are in `OpenXRManager.cpp`.
 - `include/Runtimes/RuntimeFovCorrection.hpp`, `src/Runtimes/OpenXRFrameLoop.cpp`: centred submitted FOV and aspect-correct menu quads (from 0.1.7-vive1).
 - `src/Render/EyeImageCapture.cpp`, `scripts/capture_vive.ps1`: one-shot capture of both eye images for Vive presets.
 - `tools/xr_probe/vive_pattern.cpp`: standalone D3D12/OpenXR checkerboard. Use it to check that the headset and runtime work without the game.

@@ -142,3 +142,4 @@ vr2/
 # QuickBoot emits runtime status only in the installed CET folder.
 mods/cet/CyberpunkVRPort_QuickBoot/quickboot_state.txt
 !tools/quickboot_tests/
+/capture-test-*/
